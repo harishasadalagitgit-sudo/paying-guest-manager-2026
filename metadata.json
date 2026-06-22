@@ -1,0 +1,6 @@
+{
+  "name": "Paying Guest Manager",
+  "description": "A comprehensive room, resident, payments, and enquiry management platform for PG accommodation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

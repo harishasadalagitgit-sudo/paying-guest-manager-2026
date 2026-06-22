@@ -1,0 +1,118 @@
+{
+  "entities": {
+    "Room": {
+      "title": "Room",
+      "description": "A PG room on a specific floor with a specific capacity.",
+      "type": "object",
+      "properties": {
+        "roomNum": {
+          "type": "string",
+          "description": "Room identifier, e.g., '101' or '601'"
+        },
+        "floor": {
+          "type": "integer",
+          "description": "Floor number, 1 to 6"
+        },
+        "capacity": {
+          "type": "integer",
+          "description": "Maximum number of occupants (up to 6)"
+        },
+        "occupiedCount": {
+          "type": "integer",
+          "description": "Number of active residents"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["vacant", "partially-occupied", "fully-occupied"],
+          "description": "Current status based on occupancy"
+        }
+      },
+      "required": ["roomNum", "floor", "capacity", "occupiedCount", "status"]
+    },
+    "Resident": {
+      "title": "Resident",
+      "description": "A resident living in the PG with his credentials, payments and metadata.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "dob": { "type": "string" },
+        "permanentAddress": { "type": "string" },
+        "currentWorkingCompanyOrCollege": { "type": "string" },
+        "parentsInformation": { "type": "string" },
+        "emergencyContact": { "type": "string" },
+        "mobileNumber": { "type": "string" },
+        "whatsappNumber": { "type": "string" },
+        "joiningDate": { "type": "string" },
+        "balanceAmount": { "type": "number" },
+        "roomNum": { "type": "string" },
+        "specialNotes": { "type": "string" },
+        "paymentHistoryJson": {
+          "type": "string",
+          "description": "Stringified JSON array of payment records"
+        },
+        "idsJson": {
+          "type": "string",
+          "description": "Stringified JSON array of uploaded ID cards"
+        }
+      },
+      "required": [
+        "name",
+        "dob",
+        "permanentAddress",
+        "currentWorkingCompanyOrCollege",
+        "parentsInformation",
+        "emergencyContact",
+        "mobileNumber",
+        "whatsappNumber",
+        "joiningDate",
+        "balanceAmount",
+        "roomNum"
+      ]
+    },
+    "Reminder": {
+      "title": "Reminder",
+      "description": "A reminder for specific date, Sunday, or 1st of month.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["specific-date", "sunday", "monthly-1st"] },
+        "date": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["title", "type", "date", "active"]
+    },
+    "Enquiry": {
+      "title": "Enquiry",
+      "description": "An enquiry created by a visitor.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "companyCollege": { "type": "string" },
+        "expectedJoiningDate": { "type": "string" },
+        "sharingInterest": { "type": "string" },
+        "submittedAt": { "type": "string" }
+      },
+      "required": ["name", "email", "phone", "companyCollege", "expectedJoiningDate", "sharingInterest", "submittedAt"]
+    }
+  },
+  "firestore": {
+    "/rooms/{roomId}": {
+      "schema": "Room",
+      "description": "Collection of PG rooms indexed by room number."
+    },
+    "/residents/{residentId}": {
+      "schema": "Resident",
+      "description": "Collection of residents with personal, contact, payment, and ID records."
+    },
+    "/reminders/{reminderId}": {
+      "schema": "Reminder",
+      "description": "Reminders added by PG administrator."
+    },
+    "/enquiries/{enquiryId}": {
+      "schema": "Enquiry",
+      "description": "Hostel booking and joining enquiries submitted by visitors."
+    }
+  }
+}
