@@ -266,6 +266,14 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
           More than a stay, a feeling of home
         </p>
         <div className="flex items-center gap-3">
+          <a
+            href="#contact-section"
+            className="hidden sm:inline-flex items-center gap-1.5 font-black text-xs px-4 py-2.5 rounded-full transition-all duration-200 hover:brightness-110"
+            style={{ background: GOLD, color: "#1a1200", boxShadow: `0 2px 10px ${GOLD}55` }}
+          >
+            <MapPin className="w-3.5 h-3.5" />
+            Contact
+          </a>
           <button
             onClick={() => setShowGallery(true)}
             className="hidden sm:inline-flex items-center gap-2 font-black text-xs px-4 py-2.5 rounded-full transition-all duration-200 cursor-pointer hover:brightness-110 active:scale-95"
@@ -380,8 +388,9 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
             <div className="flex items-center gap-3.5 bg-white/8 border border-white/12 backdrop-blur-sm px-5 py-3.5 rounded-2xl w-fit">
               <Phone className="w-5 h-5 shrink-0" style={{ color: GOLD }} />
               <div>
-                <p className="text-[9px] text-white/40 font-bold uppercase tracking-[0.15em]">Call Help Desk</p>
-                <p className="text-sm font-black text-white">92 57 57 57 48</p>
+                <p className="text-[9px] text-white/40 font-bold uppercase tracking-[0.15em]">Call Uday Reddy</p>
+                <p className="text-sm font-black text-white">+91 92 57 57 57 48</p>
+                <p className="text-xs font-bold text-white/60">+91 92 57 57 57 49</p>
               </div>
             </div>
           </div>
@@ -693,7 +702,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
                   {[
                     { icon: MapPin, text: "Sector 3, HSR Layout, IT Hub Metro Station, Bangalore — 560102" },
                     { icon: Mail, text: "mispacepayingguest@gmail.com" },
-                    { icon: Phone, text: "92 57 57 57 48 / 92 57 57 57 49" },
+                    { icon: Phone, text: "+91 92 57 57 57 48 / +91 92 57 57 57 49" },
                   ].map(({ icon: CIcon, text }) => (
                     <div key={text} className="flex items-start gap-2 text-xs text-slate-600">
                       <CIcon className="w-3.5 h-3.5 text-[#C9A84C] shrink-0 mt-0.5" />
@@ -708,21 +717,35 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
       </section>
 
       {/* ── CONTACT STRIP ── */}
-      <section className="py-16 px-5 md:px-14 lg:px-24" style={{ background: "#0d1b2a" }}>
+      <section className="py-16 px-5 md:px-14 lg:px-24" style={{ background: "#0d1b2a" }} id="contact-section">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center mb-12">
             <div className="space-y-5">
-              <p className="text-[#C9A84C]/70 text-[10px] font-black uppercase tracking-[0.35em]">For More Details, Call Us</p>
+              <div>
+                <p className="text-[#C9A84C]/70 text-[10px] font-black uppercase tracking-[0.35em] mb-1">Contact</p>
+                <p className="text-white font-black text-lg">Uday Reddy</p>
+                <p className="text-white/40 text-xs font-semibold">MiSpace UltraLuxury Paying Guest</p>
+              </div>
               <div className="space-y-3">
-                {["92 57 57 57 48", "92 57 57 57 49"].map((num) => (
-                  <div key={num} className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-[#C9A84C]/15 border border-[#C9A84C]/30 rounded-xl flex items-center justify-center shrink-0">
+                {["+91 92 57 57 57 48", "+91 92 57 57 57 49"].map((num) => (
+                  <a key={num} href={`tel:${num.replace(/\s/g, "")}`} className="flex items-center gap-4 group">
+                    <div className="w-10 h-10 bg-[#C9A84C]/15 border border-[#C9A84C]/30 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-[#C9A84C]/25 transition">
                       <Phone className="w-4 h-4 text-[#C9A84C]" />
                     </div>
-                    <span className="text-white text-xl sm:text-2xl font-black tracking-[0.08em]">{num}</span>
-                  </div>
+                    <span className="text-white text-xl sm:text-2xl font-black tracking-[0.08em] group-hover:text-[#C9A84C] transition">{num}</span>
+                  </a>
                 ))}
               </div>
+              <a
+                href="https://maps.google.com/?q=17.266462,78.387588"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 text-xs font-bold px-4 py-2.5 rounded-xl border transition hover:bg-[#C9A84C]/10"
+                style={{ color: GOLD, borderColor: `${GOLD}40` }}
+              >
+                <MapPin className="w-3.5 h-3.5" />
+                Open in Google Maps
+              </a>
             </div>
             <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
               {[
@@ -1118,20 +1141,53 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
       )}
 
       {/* ── FOOTER ── */}
-      <footer className="py-12 pb-24 sm:pb-12 px-6 text-center border-t border-white/8" style={{ background: "#060f1c" }} id="visitor-footer">
-        <div className="max-w-7xl mx-auto space-y-5">
+      <footer className="py-12 pb-24 sm:pb-12 px-6 border-t border-white/8" style={{ background: "#060f1c" }} id="visitor-footer">
+        <div className="max-w-5xl mx-auto space-y-8">
+          {/* Brand */}
           <div className="flex flex-col items-center gap-2">
             <MiSpaceCircleMark size={42} bg="transparent" />
             <MiSpaceTextBrand theme="dark" size="md" showSubtitle showOrnament />
           </div>
-          <p className="text-[#C9A84C] font-black text-xl uppercase tracking-[0.3em]">LIVE BETTER. STAY BETTER.</p>
-          <div className="w-16 h-px bg-white/10 mx-auto"></div>
-          <p className="text-slate-600 text-xs font-medium">
-            &copy; {new Date().getFullYear()} MiSpace Paying Guest (Boys PG). All rights reserved.
-          </p>
-          <button onClick={onSwitchToAdmin} className="text-slate-600 hover:text-[#C9A84C] text-xs font-semibold transition-colors duration-200 cursor-pointer">
-            Admin Portal →
-          </button>
+          <p className="text-[#C9A84C] font-black text-xl uppercase tracking-[0.3em] text-center">LIVE BETTER. STAY BETTER.</p>
+
+          <div className="w-full h-px bg-white/8" />
+
+          {/* Contact grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center sm:text-left">
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.25em]" style={{ color: GOLD }}>Contact Person</p>
+              <p className="text-white font-bold text-sm">Uday Reddy</p>
+              <p className="text-white/40 text-xs">MiSpace UltraLuxury Paying Guest</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.25em]" style={{ color: GOLD }}>Phone</p>
+              <a href="tel:+919257575748" className="block text-white font-bold text-sm hover:text-[#C9A84C] transition">+91 92 57 57 57 48</a>
+              <a href="tel:+919257575749" className="block text-white/70 font-semibold text-sm hover:text-[#C9A84C] transition">+91 92 57 57 57 49</a>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.25em]" style={{ color: GOLD }}>Location</p>
+              <a
+                href="https://maps.google.com/?q=17.266462,78.387588"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-white/70 hover:text-[#C9A84C] transition text-xs font-semibold"
+              >
+                <MapPin className="w-3.5 h-3.5 shrink-0" style={{ color: GOLD }} />
+                Open in Google Maps
+              </a>
+            </div>
+          </div>
+
+          <div className="w-full h-px bg-white/8" />
+
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p className="text-slate-600 text-xs font-medium">
+              &copy; {new Date().getFullYear()} MiSpace Paying Guest (Boys PG). All rights reserved.
+            </p>
+            <button onClick={onSwitchToAdmin} className="text-slate-600 hover:text-[#C9A84C] text-xs font-semibold transition-colors duration-200 cursor-pointer">
+              Admin Portal →
+            </button>
+          </div>
         </div>
       </footer>
     </div>

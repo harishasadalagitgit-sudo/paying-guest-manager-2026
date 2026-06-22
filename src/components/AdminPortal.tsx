@@ -179,6 +179,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
   const [resRoomNum, setResRoomNum] = useState("");
   const [resBedNum, setResBedNum] = useState<number>(0);
   const [resNotes, setResNotes] = useState("");
+  const [resPhoto, setResPhoto] = useState("");
 
   // Form State - Employee
   const [isAddingEmployee, setIsAddingEmployee] = useState(false);
@@ -196,6 +197,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
   const [empPhoto, setEmpPhoto] = useState<string>("");
   const [showCamera, setShowCamera] = useState(false);
   const [cameraFacing, setCameraFacing] = useState<"user" | "environment">("user");
+  const [cameraTarget, setCameraTarget] = useState<"employee" | "resident">("employee");
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [empNotes, setEmpNotes] = useState("");
@@ -633,7 +635,9 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
       ctx.scale(-1, 1);
     }
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    setEmpPhoto(canvas.toDataURL("image/jpeg", 0.8));
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+    if (cameraTarget === "resident") setResPhoto(dataUrl);
+    else setEmpPhoto(dataUrl);
     stopCamera();
   };
 
@@ -796,6 +800,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
         roomNum: resRoomNum,
         bedNum: resBedNum || null,
         specialNotes: resNotes || "",
+        photo: resPhoto || null,
         paymentHistoryJson: JSON.stringify([]),
         idsJson: JSON.stringify([])
       };
@@ -837,6 +842,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
     setResRoomNum(res.roomNum);
     setResBedNum(res.bedNum || 0);
     setResNotes(res.specialNotes || "");
+    setResPhoto(res.photo || "");
     setIsAddingResident(true);
   };
 
@@ -866,6 +872,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
     setResRoomNum("");
     setResBedNum(0);
     setResNotes("");
+    setResPhoto("");
   };
 
   // Add a reminder
@@ -1983,6 +1990,48 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                     {isEditingResidentId ? "Edit Resident Profile Details" : "New PG Resident Registry Form"}
                   </h4>
 
+                  {/* Resident Photo */}
+                  <div>
+                    <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-2">Resident Photo</label>
+                    <div className="flex items-center gap-5">
+                      <div className="w-20 h-20 rounded-2xl border-2 border-dashed border-slate-300 overflow-hidden bg-slate-50 flex items-center justify-center flex-shrink-0">
+                        {resPhoto
+                          ? <img src={resPhoto} alt="preview" className="w-full h-full object-cover" />
+                          : <UserCheck className="w-8 h-8 text-slate-300" />}
+                      </div>
+                      <div className="flex-1 flex flex-col gap-2">
+                        <div className="flex gap-2">
+                          <label className="flex-1 flex items-center justify-center gap-2 h-12 border-2 border-dashed border-indigo-200 rounded-xl cursor-pointer bg-indigo-50 hover:bg-indigo-100 transition">
+                            <Upload className="w-4 h-4 text-indigo-500" />
+                            <span className="text-xs font-bold text-indigo-600">Upload file</span>
+                            <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              try {
+                                const compressed = await compressImage(file);
+                                setResPhoto(compressed);
+                              } catch {
+                                alert("Could not process image. Try a different file.");
+                              }
+                            }} />
+                          </label>
+                          <button type="button" onClick={() => { setCameraTarget("resident"); startCamera(); }}
+                            className="flex-1 flex items-center justify-center gap-2 h-12 border-2 border-dashed border-emerald-200 rounded-xl bg-emerald-50 hover:bg-emerald-100 transition cursor-pointer">
+                            <Camera className="w-4 h-4 text-emerald-600" />
+                            <span className="text-xs font-bold text-emerald-700">Use Camera</span>
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-400">Any size — auto-compressed before saving</p>
+                        {resPhoto && (
+                          <button type="button" onClick={() => setResPhoto("")}
+                            className="text-[10px] text-red-500 hover:underline font-semibold text-left">
+                            Remove photo
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
                     <div>
                       <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Full Name *</label>
@@ -2207,23 +2256,33 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                     {filteredResidents.map((res) => {
                       const hasDocIds = res.idsJson && JSON.parse(res.idsJson).length > 0;
                       return (
-                        <div key={res.id} className="p-4 bg-slate-50/60 hover:bg-slate-50 border border-slate-150 rounded-2xl flex flex-col justify-between shadow-sm transition">
-                          <div className="space-y-2">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <h4 className="font-extrabold text-slate-800 text-sm leading-tight">{res.name}</h4>
-                                <span className="text-[10px] bg-slate-200 text-slate-600 font-bold px-1.5 py-0.5 rounded uppercase mt-1 inline-block">Room {res.roomNum}{res.bedNum ? ` · Bed ${res.bedNum}` : ""}</span>
+                        <div key={res.id} className="bg-white border border-slate-200 rounded-2xl flex flex-col justify-between shadow-sm overflow-hidden transition hover:shadow-md">
+                          {/* Photo header */}
+                          <div className="relative flex flex-col items-center overflow-hidden" style={{ background: "linear-gradient(160deg, #1e293b 0%, #334155 100%)" }}>
+                            <div className="w-full h-20 absolute inset-0 opacity-20"
+                              style={res.photo ? { backgroundImage: `url(${res.photo})`, backgroundSize: "cover", backgroundPosition: "center", filter: "blur(8px)" } : {}} />
+                            <div className="relative pt-4 pb-3 flex flex-col items-center">
+                              <div className="w-16 h-16 rounded-full border-2 overflow-hidden flex items-center justify-center shadow-lg"
+                                style={{ borderColor: "#C9A84C", background: "#1e293b" }}>
+                                {res.photo
+                                  ? <img src={res.photo} alt={res.name} className="w-full h-full object-cover" />
+                                  : <UserCheck className="w-7 h-7 text-slate-400" />}
                               </div>
-                              {res.balanceAmount > 0 ? (
-                                <div className="text-right">
-                                  <span className="text-[9.5px] bg-red-105 text-red-750 font-bold px-1.5 py-0.5 rounded border border-red-200 inline-block">₹{res.balanceAmount.toLocaleString()} Due</span>
-                                </div>
-                              ) : (
-                                <span className="text-[9.5px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded border border-emerald-200">Paid</span>
-                              )}
+                              <h4 className="mt-2 font-extrabold text-white text-sm leading-tight text-center px-2">{res.name}</h4>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded mt-1" style={{ background: "rgba(201,168,76,0.2)", color: "#C9A84C" }}>
+                                Room {res.roomNum}{res.bedNum ? ` · Bed ${res.bedNum}` : ""}
+                              </span>
                             </div>
+                            {/* Balance badge */}
+                            <div className="absolute top-2.5 right-2.5">
+                              {res.balanceAmount > 0
+                                ? <span className="text-[9px] bg-red-500/20 text-red-300 font-bold px-1.5 py-0.5 rounded border border-red-500/30">₹{res.balanceAmount.toLocaleString()} Due</span>
+                                : <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-bold px-1.5 py-0.5 rounded border border-emerald-500/30">Paid</span>}
+                            </div>
+                          </div>
 
-                            <div className="space-y-1 text-xs text-slate-550 border-t border-slate-100 pt-2.5">
+                          <div className="p-4 space-y-2 flex-1 flex flex-col justify-between">
+                            <div className="space-y-1 text-xs text-slate-550">
                               <p className="flex items-center gap-1.5">
                                 <Smartphone className="w-3.5 h-3.5 text-slate-400" />
                                 <span>{res.mobileNumber}</span>
@@ -2757,15 +2816,20 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                       <div key={emp.id} className={`bg-white border rounded-2xl shadow-sm flex flex-col overflow-hidden ${emp.status === "inactive" ? "opacity-55 border-slate-200" : "border-slate-200"}`}>
 
                         {/* Photo banner */}
-                        <div className="relative flex flex-col items-center pt-5 pb-3 bg-gradient-to-b from-slate-50 to-white border-b border-slate-100">
-                          <div className="w-16 h-16 rounded-full border-2 border-white shadow-md overflow-hidden bg-slate-200 flex items-center justify-center">
-                            {emp.photo
-                              ? <img src={emp.photo} alt={emp.name} className="w-full h-full object-cover" />
-                              : <UserCheck className="w-7 h-7 text-slate-400" />}
+                        <div className="relative flex flex-col items-center overflow-hidden" style={{ background: "linear-gradient(160deg, #1e293b 0%, #334155 100%)" }}>
+                          <div className="w-full h-24 absolute inset-0 opacity-20"
+                            style={emp.photo ? { backgroundImage: `url(${emp.photo})`, backgroundSize: "cover", backgroundPosition: "center", filter: "blur(8px)" } : {}} />
+                          <div className="relative pt-5 pb-4 flex flex-col items-center">
+                            <div className="w-20 h-20 rounded-full border-2 overflow-hidden flex items-center justify-center shadow-lg"
+                              style={{ borderColor: "#C9A84C", background: "#1e293b" }}>
+                              {emp.photo
+                                ? <img src={emp.photo} alt={emp.name} className="w-full h-full object-cover" />
+                                : <UserCheck className="w-9 h-9 text-slate-400" />}
+                            </div>
+                            <h4 className="mt-2.5 font-extrabold text-white text-sm leading-tight text-center px-2">{emp.name}</h4>
                           </div>
                           {/* Status dot */}
-                          <span className={`absolute top-3 right-3 w-2 h-2 rounded-full ${emp.status === "active" ? "bg-green-500" : "bg-slate-400"}`} title={emp.status} />
-                          <h4 className="mt-2 font-extrabold text-slate-800 text-sm leading-tight text-center">{emp.name}</h4>
+                          <span className={`absolute top-3 right-3 w-2.5 h-2.5 rounded-full ring-2 ring-slate-700 ${emp.status === "active" ? "bg-green-400" : "bg-slate-500"}`} title={emp.status} />
                         </div>
 
                         {/* Info section */}
