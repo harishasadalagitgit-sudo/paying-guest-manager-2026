@@ -123,7 +123,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
   const [phone, setPhone] = useState("");
   const [companyCollege, setCompanyCollege] = useState("");
   const [expectedJoiningDate, setExpectedJoiningDate] = useState("");
-  const [sharingInterest, setSharingInterest] = useState<"4room share" | "5room share">("4room share");
+  const [sharingInterest, setSharingInterest] = useState<"1room share" | "2room share" | "3room share" | "4room share" | "5room share">("4room share");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -231,7 +231,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
       if (!response.ok) throw new Error("Server error");
       await response.json();
       setName(""); setEmail(""); setPhone(""); setCompanyCollege("");
-      setExpectedJoiningDate(""); setSharingInterest("4room share");
+      setExpectedJoiningDate(""); setSharingInterest("1room share");
       setIsSuccess(true);
     } catch (err: any) {
       console.error("Enquiry submission error:", err);
@@ -861,8 +861,11 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
                       <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-[0.15em]">Room Sharing Type <span className="text-rose-500">*</span></label>
                       <select value={sharingInterest} onChange={(e) => setSharingInterest(e.target.value as any)}
                         className="w-full bg-white text-slate-900 text-sm border border-slate-200 rounded-xl px-4 py-3.5 focus:outline-none focus:border-[#C9A84C]/70 transition-all duration-200">
-                        <option value="4room share">4 Room Share</option>
-                        <option value="5room share">5 Room Share</option>
+                        <option value="1room share">1 Sharing</option>
+                        <option value="2room share">2 Sharing</option>
+                        <option value="3room share">3 Sharing</option>
+                        <option value="4room share">4 Sharing</option>
+                        <option value="5room share">5 Sharing</option>
                       </select>
                     </div>
                   </div>
