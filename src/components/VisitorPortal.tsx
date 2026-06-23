@@ -498,13 +498,14 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
           <p className="text-center text-[11px] font-black text-[#C9A84C]/70 uppercase tracking-[0.35em] mb-12">
             — Built for Your Comfort &amp; Well-Being —
           </p>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {[
               { icon: Wind, title: "100% Ventilation", sub: "& Lighting" },
               { icon: Dumbbell, title: "GYM", sub: "Stay Fit, Stay Strong" },
               { icon: Leaf, title: "YOGA ROOM", sub: "Refresh Your Mind & Body" },
               { icon: Tv, title: "TV LOUNGE", sub: "Unwind, Relax & Recharge" },
               { icon: Gamepad2, title: "Indoor Games", sub: "Snooker, Table Tennis & More" },
+              { icon: Utensils, title: "Self Cooking", sub: "Cook Your Own Meals Anytime" },
             ].map(({ icon: Icon, title, sub }) => (
               <div
                 key={title}
