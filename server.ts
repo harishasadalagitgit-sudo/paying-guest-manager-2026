@@ -6,7 +6,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 async function startServer() {
   const app = express();
-  const PORT = 3003;
+  const PORT = Number(process.env.PORT) || 3003;
 
   // Set payload limits for base64 ID uploads
   app.use(express.json({ limit: "50mb" }));
