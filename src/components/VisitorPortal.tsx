@@ -27,6 +27,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Gamepad2,
 } from "lucide-react";
 import { addDoc, collection } from "firebase/firestore";
 import { db } from "../lib/firebase";
@@ -76,7 +77,7 @@ const MiSpaceTextBrand = ({
   showSubtitle?: boolean;
   showOrnament?: boolean;
 }) => {
-  const titleColor = theme === "dark" ? "#FFFFFF" : NAVY;
+  const titleColor = theme === "dark" ? "#93C572" : "#4a7a38";
   const cfg = {
     xs: { title: "text-xs",    track: "tracking-[0.28em]", sub: "text-[7px]",   subTrack: "tracking-[0.32em]", line: "w-4 h-[1.5px]", gap: "gap-1.5" },
     sm: { title: "text-sm",    track: "tracking-[0.30em]", sub: "text-[8px]",   subTrack: "tracking-[0.35em]", line: "w-5 h-[1.5px]", gap: "gap-2"   },
@@ -141,8 +142,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
       });
   })();
 
-  // Hotel booking form visibility + state
-  const [showHotelForm, setShowHotelForm] = useState(false);
+  // Hotel booking form state
   const [bkName, setBkName] = useState("");
   const [bkPhone, setBkPhone] = useState("");
   const [bkEmail, setBkEmail] = useState("");
@@ -189,15 +189,6 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
     }
   };
 
-  const closeBookingModal = () => {
-    setShowHotelForm(false);
-    setBkSuccess(false);
-    setBkError("");
-    setBkName(""); setBkPhone(""); setBkEmail("");
-    setBkCheckIn(""); setBkCheckOut(""); setBkNotes("");
-    setBkRooms(1); setBkAdults(1); setBkChildren(0); setBkHasFemales(false);
-  };
-
   const pgImages = [
     {
       url: "/pgbeds.png",
@@ -205,14 +196,14 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
       desc: "Perfectly designed spacious rooms with premium beds and modern comforts.",
     },
     {
-      url: "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&q=80&w=1200",
+      url: "/MiSpacePersonalDeskNew.png",
       title: "Personal Workspace",
       desc: "Comfortable ergonomic study setups in every corner.",
     },
     {
-      url: "https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&q=80&w=1200",
-      title: "Dining & Common Area",
-      desc: "Enjoy home-style meals and access premium communal amenities.",
+      url: "/MiSpaceRoomCupboards.png",
+      title: "Storage Options",
+      desc: "Ample storage space with dedicated cupboards and shelving in every room.",
     },
   ];
 
@@ -265,49 +256,46 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
         <p className="hidden lg:block text-[11px] font-semibold italic tracking-wide" style={{ color: `${NAVY}99` }}>
           More than a stay, a feeling of home
         </p>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-2.5">
           <a
             href="#contact-section"
-            className="hidden sm:inline-flex items-center gap-1.5 font-black text-xs px-4 py-2.5 rounded-full transition-all duration-200 hover:brightness-110"
+            className="inline-flex items-center gap-1.5 font-black text-xs px-2.5 py-2.5 sm:px-4 rounded-full transition-all duration-200 hover:brightness-110"
             style={{ background: GOLD, color: "#1a1200", boxShadow: `0 2px 10px ${GOLD}55` }}
           >
             <MapPin className="w-3.5 h-3.5" />
-            Contact
+            <span className="hidden sm:inline">Contact</span>
           </a>
           <button
             onClick={() => setShowGallery(true)}
-            className="hidden sm:inline-flex items-center gap-2 font-black text-xs px-4 py-2.5 rounded-full transition-all duration-200 cursor-pointer hover:brightness-110 active:scale-95"
-            style={{ background: GOLD, color: "#1a1200", boxShadow: `0 2px 10px ${GOLD}55`, letterSpacing: "0.08em" }}
+            className="inline-flex items-center gap-1.5 font-black text-xs px-2.5 py-2.5 sm:px-4 rounded-full transition-all duration-200 cursor-pointer hover:brightness-110 active:scale-95"
+            style={{ background: GOLD, color: "#1a1200", boxShadow: `0 2px 10px ${GOLD}55` }}
           >
-            <Star className="w-3 h-3 fill-current" />
-            Gallery
-            <Star className="w-3 h-3 fill-current" />
+            <Star className="w-3.5 h-3.5 fill-current" />
+            <span className="hidden sm:inline">Gallery</span>
           </button>
           <a
             href="#enquiry-section"
-            className="inline-flex items-center gap-1.5 font-black text-xs px-4 py-2.5 rounded-full transition-all duration-200 shadow-sm hover:brightness-110"
+            className="inline-flex items-center gap-1.5 font-black text-xs px-2.5 py-2.5 sm:px-4 rounded-full transition-all duration-200 shadow-sm hover:brightness-110"
             style={{ background: GOLD, color: "#1a1200", boxShadow: `0 2px 10px ${GOLD}55` }}
           >
             <Calendar className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Book a Visit</span>
-            <span className="sm:hidden">Enquire</span>
           </a>
           <button
             onClick={onSwitchToResident}
-            className="flex items-center gap-1.5 font-black text-xs px-4 py-2.5 rounded-full transition-all duration-200 cursor-pointer hover:brightness-110"
+            className="inline-flex items-center gap-1.5 font-black text-xs px-2.5 py-2.5 sm:px-4 rounded-full transition-all duration-200 cursor-pointer hover:brightness-110"
             style={{ background: GOLD, color: "#1a1200", boxShadow: `0 2px 10px ${GOLD}55` }}
           >
             <User className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">My Account</span>
-            <span className="sm:hidden">Login</span>
           </button>
           <button
             onClick={onSwitchToAdmin}
-            className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-700 text-white font-semibold text-xs px-4 py-2.5 rounded-full transition-all duration-200 cursor-pointer"
+            className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-700 text-white font-semibold text-xs px-2.5 py-2.5 sm:px-4 rounded-full transition-all duration-200 cursor-pointer"
             id="admin-login-btn"
           >
             <Lock className="w-3.5 h-3.5" />
-            Admin
+            <span className="hidden sm:inline">Admin</span>
           </button>
         </div>
       </header>
@@ -316,7 +304,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
       <section
         className="relative overflow-hidden py-16 md:py-24 px-5 md:px-14 lg:px-24"
         id="hero-banner"
-        style={{ background: `linear-gradient(140deg, #1a2540 0%, ${NAVY} 45%, #1e2d4a 100%)` }}
+        style={{ background: `linear-gradient(140deg, #002147 0%, ${NAVY} 45%, #162d50 100%)` }}
       >
         {/* Ambient glow */}
         <div className="absolute inset-0 pointer-events-none">
@@ -329,14 +317,14 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
 
           <div className="space-y-8">
             <div>
-              <div className="flex items-center gap-5">
-                <MiSpaceCircleMark size={62} bg="transparent" />
-                <MiSpaceTextBrand theme="dark" size="lg" showSubtitle showOrnament />
+              <div className="flex flex-col items-center gap-3">
+                <MiSpaceCircleMark size={80} bg="transparent" />
+                <MiSpaceTextBrand theme="dark" size="xl" showSubtitle showOrnament />
               </div>
 
-              <div className="mt-6 space-y-0.5">
-                <div className="text-3xl sm:text-4xl md:text-5xl font-black text-white leading-tight tracking-tight">MORE THAN A STAY,</div>
-                <div className="text-3xl sm:text-4xl md:text-5xl font-black leading-tight tracking-tight" style={{ color: GOLD }}>A FEELING OF HOME.</div>
+              <div className="mt-6 space-y-0.5 text-center">
+                <div className="text-sm sm:text-base md:text-lg font-black leading-tight tracking-tight" style={{ color: GOLD }}>MORE THAN A STAY,</div>
+                <div className="text-sm sm:text-base md:text-lg font-black leading-tight tracking-tight" style={{ color: GOLD }}>A FEELING OF HOME.</div>
               </div>
 
               <div className="flex items-center gap-2.5 mt-4">
@@ -355,7 +343,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
 
             <div className="grid grid-cols-2 gap-3">
               {[
-                { icon: Wifi, label: "1 Gbps Free WiFi" },
+                { icon: Wifi, label: "Unlimited HiSpeed WiFi" },
                 { icon: Utensils, label: "3 Meals Daily" },
                 { icon: ShieldCheck, label: "24/7 Security" },
                 { icon: Zap, label: "Power Backup" },
@@ -376,22 +364,36 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
                 <Calendar className="w-4 h-4" />
                 Book PG Visit / Enquiry
               </a>
-              <button
-                onClick={() => setShowHotelForm(true)}
-                className="font-black flex items-center justify-center gap-2 px-7 py-4 rounded-2xl transition-all duration-200 text-sm border cursor-pointer"
-                style={{ color: GOLD, borderColor: `${GOLD}50`, background: `${GOLD}12` }}
+              <a
+                href="#hotel-section"
+                className="font-black flex items-center justify-center gap-2 px-7 py-4 rounded-2xl transition-all duration-200 shadow-lg text-sm text-white"
+                style={{ background: GOLD, boxShadow: `0 8px 28px ${GOLD}55` }}
               >
                 <Hotel className="w-4 h-4" />
                 Book Hotel Room
-              </button>
+              </a>
             </div>
-            <div className="flex items-center gap-3.5 bg-white/8 border border-white/12 backdrop-blur-sm px-5 py-3.5 rounded-2xl w-fit">
-              <Phone className="w-5 h-5 shrink-0" style={{ color: GOLD }} />
-              <div>
-                <p className="text-[9px] text-white/40 font-bold uppercase tracking-[0.15em]">Call Uday Reddy</p>
-                <p className="text-sm font-black text-white">+91 92 57 57 57 48</p>
-                <p className="text-xs font-bold text-white/60">+91 92 57 57 57 49</p>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-3.5 bg-white/8 border border-white/12 backdrop-blur-sm px-5 py-3.5 rounded-2xl">
+                <Phone className="w-5 h-5 shrink-0" style={{ color: GOLD }} />
+                <div>
+                  <p className="text-[9px] text-white/40 font-bold uppercase tracking-[0.15em]">Contact</p>
+                  <a href="tel:+919257575748" className="block text-sm font-black text-white hover:text-[#C9A84C] transition-colors">+91 92 57 57 57 48</a>
+                  <a href="tel:+919257575749" className="block text-sm font-black text-white hover:text-[#C9A84C] transition-colors">+91 92 57 57 57 49</a>
+                </div>
               </div>
+              <a
+                href="https://maps.google.com/?q=17.266462,78.387588"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3.5 bg-white/8 border border-white/12 backdrop-blur-sm px-5 py-3.5 rounded-2xl hover:bg-white/12 transition-all duration-200"
+              >
+                <MapPin className="w-5 h-5 shrink-0" style={{ color: GOLD }} />
+                <div>
+                  <p className="text-[9px] text-white/40 font-bold uppercase tracking-[0.15em]">Location</p>
+                  <p className="text-sm font-black text-white">Open in Google Maps</p>
+                </div>
+              </a>
             </div>
           </div>
 
@@ -444,9 +446,10 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
               <span className="text-[#C9A84C] text-xs font-bold uppercase tracking-[0.18em]">Fresh • Hygienic • Nutritious</span>
             </div>
             <div>
-              <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-[#2F3F5E] leading-none tracking-tight">AUTHENTIC</div>
-              <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-[#C9A84C] leading-none tracking-tight">HOMELY</div>
-              <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-[#C9A84C] leading-none tracking-tight">FOOD</div>
+              <div className="text-2xl sm:text-3xl md:text-4xl font-black text-[#2F3F5E] leading-none tracking-tight">AUTHENTIC</div>
+              <div className="text-2xl sm:text-3xl md:text-4xl font-black leading-none tracking-tight">
+                <span style={{ color: "#C9A84C" }}>HOMELY FOOD</span>
+              </div>
             </div>
             <div className="space-y-1.5 text-slate-600 text-base font-medium">
               <p>Nutritious • Hygienic • Fresh</p>
@@ -490,18 +493,18 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
       </section>
 
       {/* ── BUILT FOR COMFORT ── */}
-      <section className="py-16 px-5 md:px-14 lg:px-24" style={{ background: "#0d1b2a" }}>
+      <section className="py-16 px-5 md:px-14 lg:px-24" style={{ background: "#002147" }}>
         <div className="max-w-7xl mx-auto">
           <p className="text-center text-[11px] font-black text-[#C9A84C]/70 uppercase tracking-[0.35em] mb-12">
             — Built for Your Comfort &amp; Well-Being —
           </p>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
             {[
               { icon: Wind, title: "100% Ventilation", sub: "& Lighting" },
               { icon: Dumbbell, title: "GYM", sub: "Stay Fit, Stay Strong" },
               { icon: Leaf, title: "YOGA ROOM", sub: "Refresh Your Mind & Body" },
-              { icon: Wifi, title: "FREE Hi Speed WiFi", sub: "Stay Connected Always" },
-              { icon: Zap, title: "24 HRS Power Backup", sub: "Always On, Always Ready" },
+              { icon: Tv, title: "TV LOUNGE", sub: "Unwind, Relax & Recharge" },
+              { icon: Gamepad2, title: "Indoor Games", sub: "Snooker, Table Tennis & More" },
             ].map(({ icon: Icon, title, sub }) => (
               <div
                 key={title}
@@ -533,26 +536,11 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-5">
             {[
-              {
-                img: "https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&q=80&w=800",
-                icon: Tv,
-                label: "LUXURIOUS TV LOUNGE SPACE",
-                sub: "Unwind. Relax. Recharge",
-              },
-              {
-                img: "https://images.unsplash.com/photo-1571902943202-507ec2618e8f?auto=format&fit=crop&q=80&w=800",
-                icon: Dumbbell,
-                label: "FULLY EQUIPPED GYM",
-                sub: "Stay Fit, Stay Strong",
-              },
-              {
-                img: "https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&q=80&w=800",
-                icon: Bed,
-                label: "AC & NON AC ROOMS",
-                sub: "TV (Optional)",
-              },
+              { img: "/MiSpaceLoungeSofa.png", icon: Tv, label: "LUXURIOUS TV LOUNGE SPACE", sub: "Unwind. Relax. Recharge" },
+              { img: "https://images.unsplash.com/photo-1571902943202-507ec2618e8f?auto=format&fit=crop&q=80&w=800", icon: Dumbbell, label: "FULLY EQUIPPED GYM", sub: "Stay Fit, Stay Strong" },
+              { img: "/MiSpaceHotDesks.png", icon: Sparkles, label: "HOT DESKS", sub: "Work Smart, Work Comfortably" },
             ].map(({ img, icon: Icon, label, sub }) => (
               <div
                 key={label}
@@ -574,22 +562,11 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
             ))}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             {[
-              {
-                img: "/pgsnookertable.png",
-                icon: Star,
-                label: "SNOOKER ZONE",
-                sub: "Play & Enjoy — All Day Fun",
-                tag: "Indoor Game",
-              },
-              {
-                img: "https://images.unsplash.com/photo-1534158914592-062992fbe900?auto=format&fit=crop&q=80&w=900",
-                icon: Star,
-                label: "TABLE TENNIS",
-                sub: "Sharpen Your Focus, One Rally at a Time",
-                tag: "Indoor Game",
-              },
+              { img: "/pgsnookertable.png", icon: Star, label: "SNOOKER ZONE", sub: "Play & Enjoy — All Day Fun", tag: "Indoor Game" },
+              { img: "https://images.unsplash.com/photo-1534158914592-062992fbe900?auto=format&fit=crop&q=80&w=900", icon: Star, label: "TABLE TENNIS", sub: "Sharpen Your Focus, One Rally at a Time", tag: "Indoor Game" },
+              { img: "/MiSpaceIndoorFootball.png", icon: Star, label: "INDOOR FOOTBALL", sub: "Kick Off & Have Fun", tag: "Indoor Game" },
             ].map(({ img, icon: Icon, label, sub, tag }) => (
               <div
                 key={label}
@@ -617,7 +594,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
       </section>
 
       {/* ── WASHING MACHINES + CCTV ── */}
-      <section className="py-14 px-5 md:px-14 lg:px-24" style={{ background: "#0d1b2a" }}>
+      <section className="py-14 px-5 md:px-14 lg:px-24" style={{ background: "#002147" }}>
         <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
           {[
             {
@@ -628,7 +605,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
               desc: "State-of-the-art washing machines available around the clock — keeping your laundry fresh and easy.",
             },
             {
-              img: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&q=80&w=800",
+              img: "/MiSpaceCCTV.png",
               icon: Video,
               label: "24 HRS CCTV SURVEILLANCE",
               sub: "Your Safety, Our Priority.",
@@ -669,12 +646,12 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
               icon: ShieldCheck,
               title: "Pristine & Safe Living",
               desc: "Your luxury PG experience is built around peaceful safety and spotless cleanliness, with daily professional housekeeping.",
-              bullets: ["24/7 Security Guards & Active CCTV", "Daily Room & Bathroom Sanitization", "Hi-Speed Internet & Power Backup"],
+              bullets: ["24/7 Security Guards & Active CCTV", "Daily Room & Bathroom Sanitization", "Unlimited HiSpeed Internet & Power Backup"],
             },
             {
               icon: MapPin,
               title: "Prime Accessible Location",
-              desc: "Centrally located near IT parks and top universities. Metro and bus stations just a 3-minute stroll away.",
+              desc: "Strategically located with easy access to key destinations. 10 minutes drive to International Airport. 19 minutes to HiTech City. All facilities available nearby.",
               bullets: [],
               contact: true,
             },
@@ -700,13 +677,18 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
               ) : (
                 <div className="space-y-3 border-t border-[#C9A84C]/15 pt-4">
                   {[
-                    { icon: MapPin, text: "Sector 3, HSR Layout, IT Hub Metro Station, Bangalore — 560102" },
-                    { icon: Mail, text: "mispacepayingguest@gmail.com" },
-                    { icon: Phone, text: "+91 92 57 57 57 48 / +91 92 57 57 57 49" },
-                  ].map(({ icon: CIcon, text }) => (
+                    { icon: MapPin, text: "Shamshabad RB Nagar, Street No 4, Hyderabad, Telangana", href: undefined },
+                    { icon: Mail, text: "mispacepayingguest@gmail.com", href: "mailto:mispacepayingguest@gmail.com" },
+                    { icon: Phone, text: "+91 92 57 57 57 48", href: "tel:+919257575748" },
+                    { icon: Phone, text: "+91 92 57 57 57 49", href: "tel:+919257575749" },
+                  ].map(({ icon: CIcon, text, href }) => (
                     <div key={text} className="flex items-start gap-2 text-xs text-slate-600">
                       <CIcon className="w-3.5 h-3.5 text-[#C9A84C] shrink-0 mt-0.5" />
-                      <span className="font-medium leading-snug">{text}</span>
+                      {href ? (
+                        <a href={href} className="font-medium leading-snug hover:text-[#C9A84C] transition-colors">{text}</a>
+                      ) : (
+                        <span className="font-medium leading-snug">{text}</span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -717,7 +699,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
       </section>
 
       {/* ── CONTACT STRIP ── */}
-      <section className="py-16 px-5 md:px-14 lg:px-24" style={{ background: "#0d1b2a" }} id="contact-section">
+      <section className="py-16 px-5 md:px-14 lg:px-24" style={{ background: "#002147" }} id="contact-section">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center mb-12">
             <div className="space-y-5">
@@ -751,7 +733,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
               {[
                 { icon: Utensils, label: "Authentic Homely Food" },
                 { icon: Wind, label: "100% Ventilation & Lighting" },
-                { icon: Wifi, label: "Free Hi Speed WiFi" },
+                { icon: Wifi, label: "Unlimited HiSpeed WiFi" },
                 { icon: Zap, label: "24 Hrs Power Back" },
                 { icon: ShieldCheck, label: "Safe · Clean · Secure" },
               ].map(({ icon: Icon, label }) => (
@@ -905,6 +887,155 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
         </div>
       </section>
 
+      {/* ── HOTEL BOOKING SECTION ── */}
+      <section
+        className="py-20 px-5 md:px-14 lg:px-24"
+        id="hotel-section"
+        style={{ background: CREAM }}
+      >
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-14 items-center">
+          <div className="lg:col-span-5 space-y-7">
+            <div className="inline-block bg-[#C9A84C]/15 text-[#C9A84C] border border-[#C9A84C]/30 px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-[0.2em]">
+              Hotel Bookings Open
+            </div>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-[#2F3F5E] leading-tight tracking-tight">
+              Book a Hotel Room at MiSpace
+            </h2>
+            <p className="text-slate-500 text-sm leading-relaxed">
+              Hosting guests or need a short stay? Our premium hotel rooms on Floor 5 offer luxury suites with all amenities. Submit your request and our team will confirm availability within 2 hours.
+            </p>
+            <div className="space-y-3.5 pt-2">
+              {[
+                "Floor 5 · Luxury Suites",
+                "Male Guests Only",
+                "Confirmed within 2 Hours",
+                "All MiSpace Amenities Included",
+              ].map((item) => (
+                <div key={item} className="flex items-center gap-3">
+                  <CheckCircle className="w-4 h-4 text-[#C9A84C] shrink-0" />
+                  <span className="text-xs font-semibold text-slate-700">{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="lg:col-span-7">
+            <div className="bg-white rounded-3xl p-7 sm:p-9 border border-[#C9A84C]/20 shadow-md shadow-stone-200/60">
+              <h3 className="text-lg font-black text-[#2F3F5E] mb-7 flex items-center gap-2.5">
+                <div className="w-8 h-8 bg-[#C9A84C]/15 border border-[#C9A84C]/30 rounded-lg flex items-center justify-center">
+                  <Hotel className="w-4 h-4 text-[#C9A84C]" />
+                </div>
+                Hotel Room Booking Request
+              </h3>
+
+              {bkSuccess ? (
+                <div className="text-center space-y-6 py-10">
+                  <div className="mx-auto w-16 h-16 bg-green-500/15 border border-green-500/30 rounded-2xl flex items-center justify-center">
+                    <CheckCircle className="w-8 h-8 text-green-500" />
+                  </div>
+                  <div>
+                    <h4 className="text-2xl font-black text-[#2F3F5E] mb-2">Request Submitted!</h4>
+                    <p className="text-sm text-slate-600 max-w-sm mx-auto leading-relaxed">
+                      Our team will contact you within 2 hours to confirm availability and discuss payment.
+                    </p>
+                  </div>
+                  <button onClick={() => { setBkSuccess(false); setBkName(""); setBkPhone(""); setBkEmail(""); setBkCheckIn(""); setBkCheckOut(""); setBkNotes(""); setBkRooms(1); setBkAdults(1); setBkChildren(0); setBkHasFemales(false); }}
+                    className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-sm px-7 py-3.5 rounded-xl transition-all duration-200 cursor-pointer">
+                    Submit Another Request
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleBookingSubmit} className="space-y-5">
+                  {bkError && (
+                    <div className="bg-rose-50 border border-rose-200 p-3.5 rounded-xl text-rose-700 text-xs text-center font-semibold">{bkError}</div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-[0.15em]">Full Name <span className="text-rose-500">*</span></label>
+                      <input type="text" required value={bkName} onChange={(e) => setBkName(e.target.value)} placeholder="Your full name"
+                        className="w-full bg-slate-50 text-slate-900 placeholder-slate-400 text-sm border border-slate-200 rounded-xl px-4 py-3.5 focus:outline-none focus:border-[#C9A84C]/70 transition-all duration-200" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-[0.15em]">Phone Number <span className="text-rose-500">*</span></label>
+                      <input type="tel" required value={bkPhone} onChange={(e) => setBkPhone(e.target.value)} placeholder="+91 92 57 57 57 48"
+                        className="w-full bg-slate-50 text-slate-900 placeholder-slate-400 text-sm border border-slate-200 rounded-xl px-4 py-3.5 focus:outline-none focus:border-[#C9A84C]/70 transition-all duration-200" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-[0.15em]">Email Address <span className="text-rose-500">*</span></label>
+                    <input type="email" required value={bkEmail} onChange={(e) => setBkEmail(e.target.value)} placeholder="your@email.com"
+                      className="w-full bg-slate-50 text-slate-900 placeholder-slate-400 text-sm border border-slate-200 rounded-xl px-4 py-3.5 focus:outline-none focus:border-[#C9A84C]/70 transition-all duration-200" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-5">
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-[0.15em]">Check-in <span className="text-rose-500">*</span></label>
+                      <input type="date" required value={bkCheckIn} onChange={(e) => setBkCheckIn(e.target.value)}
+                        className="w-full bg-slate-50 text-slate-900 text-sm border border-slate-200 rounded-xl px-4 py-3.5 focus:outline-none focus:border-[#C9A84C]/70 transition-all duration-200" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-[0.15em]">Check-out <span className="text-rose-500">*</span></label>
+                      <input type="date" required value={bkCheckOut} onChange={(e) => setBkCheckOut(e.target.value)}
+                        className="w-full bg-slate-50 text-slate-900 text-sm border border-slate-200 rounded-xl px-4 py-3.5 focus:outline-none focus:border-[#C9A84C]/70 transition-all duration-200" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-5">
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-[0.15em]">Rooms <span className="text-rose-500">*</span></label>
+                      <input type="number" required min={1} value={bkRooms} onChange={(e) => setBkRooms(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-full bg-slate-50 text-slate-900 text-sm border border-slate-200 rounded-xl px-4 py-3.5 focus:outline-none focus:border-[#C9A84C]/70 transition-all duration-200" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-[0.15em]">Adults <span className="text-rose-500">*</span></label>
+                      <input type="number" required min={1} value={bkAdults} onChange={(e) => setBkAdults(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-full bg-slate-50 text-slate-900 text-sm border border-slate-200 rounded-xl px-4 py-3.5 focus:outline-none focus:border-[#C9A84C]/70 transition-all duration-200" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-[0.15em]">Children</label>
+                      <input type="number" min={0} value={bkChildren} onChange={(e) => setBkChildren(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-full bg-slate-50 text-slate-900 text-sm border border-slate-200 rounded-xl px-4 py-3.5 focus:outline-none focus:border-[#C9A84C]/70 transition-all duration-200" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-[0.15em]">Group Includes Female Guests?</label>
+                    <div className="flex gap-3">
+                      {[{ val: false, label: "Male Only" }, { val: true, label: "Includes Females" }].map(({ val, label }) => (
+                        <button key={label} type="button" onClick={() => setBkHasFemales(val)}
+                          className="flex-1 text-xs font-black py-2.5 rounded-xl border-2 transition cursor-pointer"
+                          style={{ background: bkHasFemales === val ? (val ? "#fef2f2" : `${GOLD}15`) : "#f8fafc", borderColor: bkHasFemales === val ? (val ? "#ef4444" : GOLD) : "#e2e8f0", color: bkHasFemales === val ? (val ? "#dc2626" : NAVY) : "#64748b" }}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {bkHasFemales && (
+                    <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                      <span className="text-base shrink-0">⚠️</span>
+                      <p className="text-xs font-semibold text-red-700 leading-relaxed">MiSpace is a <strong>Boys-Only</strong> facility. Accommodation for female guests is not available.</p>
+                    </div>
+                  )}
+                  {bkCapacityExceeded && (
+                    <div className="flex items-start gap-2.5 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
+                      <span className="text-base shrink-0">⚠️</span>
+                      <p className="text-xs font-semibold text-orange-800 leading-relaxed"><strong>{bkRooms} room{bkRooms > 1 ? "s" : ""}</strong> can accommodate up to <strong>{bkMaxGuests} guests</strong> (3 per room). Please increase rooms.</p>
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 mb-2 uppercase tracking-[0.15em]">Notes / Special Requests</label>
+                    <textarea rows={2} value={bkNotes} onChange={(e) => setBkNotes(e.target.value)} placeholder="Any special requirements..."
+                      className="w-full bg-slate-50 text-slate-900 placeholder-slate-400 text-sm border border-slate-200 rounded-xl px-4 py-3.5 focus:outline-none focus:border-[#C9A84C]/70 transition-all duration-200 resize-none" />
+                  </div>
+                  <button type="submit" disabled={bkSubmitting}
+                    className="w-full font-black text-sm py-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 text-slate-900"
+                    style={{ background: GOLD, boxShadow: `0 8px 28px ${GOLD}55` }}>
+                    {bkSubmitting ? <><Clock className="w-4 h-4 animate-spin" /> Submitting...</> : <><Send className="w-4 h-4" /> Submit Booking Request</>}
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── FLOATING ENQUIRY BUTTON ── */}
       <a
         href="#enquiry-section"
@@ -980,168 +1111,9 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
         </div>
       )}
 
-      {/* ── HOTEL BOOKING MODAL ── */}
-      {showHotelForm && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)" }}>
-          <div className="w-full max-w-lg rounded-3xl shadow-2xl overflow-y-auto max-h-[92vh]" style={{ background: CREAM }}>
-
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${GOLD}18`, border: `1px solid ${GOLD}40` }}>
-                  <Hotel className="w-4.5 h-4.5" style={{ color: GOLD }} />
-                </div>
-                <div>
-                  <h3 className="text-base font-black" style={{ color: NAVY }}>Hotel Room Booking Request</h3>
-                  <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider mt-0.5">Floor 5 · Luxury Suites · Male Only</p>
-                </div>
-              </div>
-              <button onClick={closeBookingModal} className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition cursor-pointer">
-                <X className="w-4 h-4 text-slate-600" />
-              </button>
-            </div>
-
-            <div className="px-6 py-6">
-              {bkSuccess ? (
-                <div className="text-center space-y-5 py-6">
-                  <div className="mx-auto w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: `${GOLD}18` }}>
-                    <CheckCircle className="w-7 h-7" style={{ color: GOLD }} />
-                  </div>
-                  <div>
-                    <h4 className="text-xl font-black" style={{ color: NAVY }}>Request Submitted!</h4>
-                    <p className="text-sm text-slate-500 mt-2 leading-relaxed max-w-xs mx-auto">
-                      Our team will contact you within 2 hours to confirm availability and discuss payment.
-                    </p>
-                  </div>
-                  <button onClick={closeBookingModal} className="w-full font-black text-sm py-3 rounded-xl cursor-pointer text-slate-900" style={{ background: GOLD }}>
-                    Done
-                  </button>
-                </div>
-              ) : (
-                <form onSubmit={handleBookingSubmit} className="space-y-4">
-                  {bkError && (
-                    <div className="bg-red-50 border border-red-200 text-red-700 text-xs font-semibold px-4 py-3 rounded-xl">{bkError}</div>
-                  )}
-
-                  {/* Contact details */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-1.5">Full Name <span className="text-red-500">*</span></label>
-                      <input type="text" required value={bkName} onChange={(e) => setBkName(e.target.value)} placeholder="Your full name"
-                        className="w-full bg-white text-slate-900 placeholder-slate-400 text-sm border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-[#C9A84C]/60 transition" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-1.5">Phone Number <span className="text-red-500">*</span></label>
-                      <input type="tel" required value={bkPhone} onChange={(e) => setBkPhone(e.target.value)} placeholder="+91 92 57 57 57 48"
-                        className="w-full bg-white text-slate-900 placeholder-slate-400 text-sm border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-[#C9A84C]/60 transition" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-1.5">Email Address <span className="text-red-500">*</span></label>
-                    <input type="email" required value={bkEmail} onChange={(e) => setBkEmail(e.target.value)} placeholder="your@email.com"
-                      className="w-full bg-white text-slate-900 placeholder-slate-400 text-sm border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-[#C9A84C]/60 transition" />
-                  </div>
-
-                  {/* Dates */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-1.5">Check-in <span className="text-red-500">*</span></label>
-                      <input type="date" required value={bkCheckIn} onChange={(e) => setBkCheckIn(e.target.value)}
-                        className="w-full bg-white text-slate-900 text-sm border border-slate-200 rounded-xl px-3 py-3 focus:outline-none focus:border-[#C9A84C]/60 transition" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-1.5">Check-out <span className="text-red-500">*</span></label>
-                      <input type="date" required value={bkCheckOut} onChange={(e) => setBkCheckOut(e.target.value)}
-                        className="w-full bg-white text-slate-900 text-sm border border-slate-200 rounded-xl px-3 py-3 focus:outline-none focus:border-[#C9A84C]/60 transition" />
-                    </div>
-                  </div>
-
-                  {/* Rooms + guests */}
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-1.5">Rooms <span className="text-red-500">*</span></label>
-                      <input type="number" required min={1} value={bkRooms} onChange={(e) => setBkRooms(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="w-full bg-white text-slate-900 text-sm border border-slate-200 rounded-xl px-3 py-3 focus:outline-none focus:border-[#C9A84C]/60 transition" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-1.5">Adults <span className="text-red-500">*</span></label>
-                      <input type="number" required min={1} value={bkAdults} onChange={(e) => setBkAdults(Math.max(1, parseInt(e.target.value) || 1))}
-                        className="w-full bg-white text-slate-900 text-sm border border-slate-200 rounded-xl px-3 py-3 focus:outline-none focus:border-[#C9A84C]/60 transition" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-1.5">Children</label>
-                      <input type="number" min={0} value={bkChildren} onChange={(e) => setBkChildren(Math.max(0, parseInt(e.target.value) || 0))}
-                        className="w-full bg-white text-slate-900 text-sm border border-slate-200 rounded-xl px-3 py-3 focus:outline-none focus:border-[#C9A84C]/60 transition" />
-                    </div>
-                  </div>
-
-                  {/* Gender toggle */}
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-2">Group Includes Female Guests?</label>
-                    <div className="flex gap-3">
-                      {[{ val: false, label: "Male Only" }, { val: true, label: "Includes Females" }].map(({ val, label }) => (
-                        <button key={label} type="button" onClick={() => setBkHasFemales(val)}
-                          className="flex-1 text-xs font-black py-2.5 rounded-xl border-2 transition cursor-pointer"
-                          style={{
-                            background: bkHasFemales === val ? (val ? "#fef2f2" : `${GOLD}15`) : "white",
-                            borderColor: bkHasFemales === val ? (val ? "#ef4444" : GOLD) : "#e2e8f0",
-                            color: bkHasFemales === val ? (val ? "#dc2626" : NAVY) : "#64748b",
-                          }}>
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Warnings */}
-                  {bkHasFemales && (
-                    <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-                      <span className="text-base shrink-0">⚠️</span>
-                      <p className="text-xs font-semibold text-red-700 leading-relaxed">
-                        MiSpace is a <strong>Boys-Only</strong> facility. Accommodation for female guests is not available on the premises.
-                      </p>
-                    </div>
-                  )}
-                  {bkChildren > 0 && (
-                    <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-                      <span className="text-base shrink-0">ℹ️</span>
-                      <p className="text-xs font-semibold text-amber-800 leading-relaxed">
-                        Only <strong>male children</strong> may be accommodated. Female children are not permitted on the premises.
-                      </p>
-                    </div>
-                  )}
-                  {bkCapacityExceeded && (
-                    <div className="flex items-start gap-2.5 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
-                      <span className="text-base shrink-0">⚠️</span>
-                      <p className="text-xs font-semibold text-orange-800 leading-relaxed">
-                        <strong>{bkRooms} room{bkRooms > 1 ? "s" : ""}</strong> can accommodate up to <strong>{bkMaxGuests} guests</strong> maximum (3 per room). You have entered {bkTotalGuests} guests — please increase the number of rooms.
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Notes */}
-                  <div>
-                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.15em] mb-1.5">Notes / Special Requests</label>
-                    <textarea rows={2} value={bkNotes} onChange={(e) => setBkNotes(e.target.value)} placeholder="Any special requirements..."
-                      className="w-full bg-white text-slate-900 placeholder-slate-400 text-sm border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-[#C9A84C]/60 transition resize-none" />
-                  </div>
-
-                  <button type="submit" disabled={bkSubmitting}
-                    className="w-full font-black text-sm py-3.5 rounded-xl transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 text-slate-900"
-                    style={{ background: GOLD }}>
-                    {bkSubmitting
-                      ? <><Clock className="w-4 h-4 animate-spin" /> Submitting...</>
-                      : <><Send className="w-4 h-4" /> Submit Booking Request</>}
-                  </button>
-                </form>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── FOOTER ── */}
-      <footer className="py-12 pb-24 sm:pb-12 px-6 border-t border-white/8" style={{ background: "#060f1c" }} id="visitor-footer">
+      <footer className="py-12 pb-24 sm:pb-12 px-6 border-t border-white/8" style={{ background: "#060f1e" }} id="visitor-footer">
         <div className="max-w-5xl mx-auto space-y-8">
           {/* Brand */}
           <div className="flex flex-col items-center gap-2">
@@ -1162,7 +1134,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
             <div className="space-y-1">
               <p className="text-[10px] font-black uppercase tracking-[0.25em]" style={{ color: GOLD }}>Phone</p>
               <a href="tel:+919257575748" className="block text-white font-bold text-sm hover:text-[#C9A84C] transition">+91 92 57 57 57 48</a>
-              <a href="tel:+919257575749" className="block text-white/70 font-semibold text-sm hover:text-[#C9A84C] transition">+91 92 57 57 57 49</a>
+              <a href="tel:+919257575749" className="block text-white font-bold text-sm hover:text-[#C9A84C] transition">+91 92 57 57 57 49</a>
             </div>
             <div className="space-y-1">
               <p className="text-[10px] font-black uppercase tracking-[0.25em]" style={{ color: GOLD }}>Location</p>

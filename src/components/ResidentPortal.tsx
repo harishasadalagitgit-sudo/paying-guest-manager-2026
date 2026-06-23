@@ -13,7 +13,7 @@ const CREAM = "#F8F7F4";
 
 // ── MI SPACE branding ─────────────────────────────────────────────────────────
 const MiSpaceTextBrand = ({ theme = "light" }: { theme?: "light" | "dark" }) => {
-  const titleColor = theme === "dark" ? "#FFFFFF" : NAVY;
+  const titleColor = theme === "dark" ? "#93C572" : "#4a7a38";
   return (
     <div className="flex flex-col items-center">
       <div className="flex items-center gap-2">
@@ -81,7 +81,7 @@ function ResidentLogin({ onFound }: { onFound: (r: Resident) => void }) {
   const inputClass = "w-full bg-white/8 text-white placeholder-white/25 text-sm border border-white/10 rounded-xl px-4 py-3 focus:outline-none transition-all focus:border-[#C9A84C]/60";
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12" style={{ background: "#0d1b2a" }}>
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12" style={{ background: "#002147" }}>
       <div className="w-full max-w-sm">
         <div className="text-center mb-8 space-y-3">
           <MiSpaceTextBrand theme="dark" />
@@ -226,7 +226,7 @@ function ResidentDashboard({ resident, onLogout }: { resident: Resident; onLogou
 
       <main className="max-w-4xl mx-auto px-4 py-8 space-y-6">
         {/* Welcome banner */}
-        <div className="rounded-2xl p-6 text-white" style={{ background: `linear-gradient(135deg, #0d1b2a 0%, ${NAVY} 60%, #1e2d4a 100%)` }}>
+        <div className="rounded-2xl p-6 text-white" style={{ background: `linear-gradient(135deg, #002147 0%, ${NAVY} 60%, #1e2d4a 100%)` }}>
           <p className="text-[10px] font-black uppercase tracking-[0.3em] mb-1" style={{ color: `${GOLD}99` }}>Welcome Back</p>
           <h1 className="text-2xl font-black tracking-tight">{resident.name}</h1>
           <p className="text-white/50 text-xs mt-1">Room {resident.roomNum}{resident.bedNum ? ` · Bed ${resident.bedNum}` : ""} · Member since {resident.joiningDate}</p>
