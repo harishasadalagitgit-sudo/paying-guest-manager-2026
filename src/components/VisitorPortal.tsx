@@ -315,7 +315,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
 
         <div className="max-w-7xl mx-auto relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
 
-          <div className="space-y-8 order-2 lg:order-1">
+          <div className="space-y-8">
             <div>
               <div className="flex flex-col items-center gap-3">
                 <MiSpaceCircleMark size={80} bg="transparent" />
@@ -333,6 +333,42 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
                     {i > 0 && <span className="font-black" style={{ color: `${GOLD}80` }}>•</span>}
                     <span className="text-white/50 text-xs font-bold uppercase tracking-[0.18em]">{word}</span>
                   </React.Fragment>
+                ))}
+              </div>
+            </div>
+
+            {/* Mobile-only carousel — between brand and description */}
+            <div className="lg:hidden space-y-3">
+              <div className="relative aspect-[4/3] overflow-hidden rounded-3xl shadow-2xl shadow-amber-900/40 border border-white/10 bg-slate-900">
+                <img
+                  src={pgImages[activeImageTab].url}
+                  alt={pgImages[activeImageTab].title}
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover transition-all duration-700 ease-in-out"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent flex flex-col justify-end p-7">
+                  <h3 className="text-xl font-black text-white mb-1">{pgImages[activeImageTab].title}</h3>
+                  <p className="text-sm text-white/70 leading-relaxed">{pgImages[activeImageTab].desc}</p>
+                </div>
+                <div className="absolute top-5 right-5 flex gap-2">
+                  {pgImages.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setActiveImageTab(idx)}
+                      className={`rounded-full transition-all duration-200 cursor-pointer ${activeImageTab === idx ? "w-5 h-2.5 bg-amber-400" : "w-2.5 h-2.5 bg-white/40 hover:bg-white/80"}`}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {pgImages.map((img, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setActiveImageTab(idx)}
+                    className={`aspect-video overflow-hidden rounded-xl border-2 transition-all duration-200 cursor-pointer ${activeImageTab === idx ? "border-amber-500 shadow-lg shadow-[#C9A84C]/30" : "border-white/10 opacity-50 hover:opacity-80"}`}
+                  >
+                    <img src={img.url} alt={img.title} referrerPolicy="no-referrer" className="w-full h-full object-cover" />
+                  </button>
                 ))}
               </div>
             </div>
@@ -397,13 +433,13 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
             </div>
           </div>
 
-          <div className="space-y-3 order-1 lg:order-2" id="carousel-visuals">
+          <div className="space-y-3 hidden lg:block" id="carousel-visuals">
             <div className="relative aspect-[4/3] overflow-hidden rounded-3xl shadow-2xl shadow-amber-900/40 border border-white/10 bg-slate-900">
               <img
                 src={pgImages[activeImageTab].url}
                 alt={pgImages[activeImageTab].title}
                 referrerPolicy="no-referrer"
-                className="w-full h-full object-contain transition-all duration-700 ease-in-out"
+                className="w-full h-full object-cover transition-all duration-700 ease-in-out"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent flex flex-col justify-end p-7">
                 <h3 className="text-xl font-black text-white mb-1">{pgImages[activeImageTab].title}</h3>
