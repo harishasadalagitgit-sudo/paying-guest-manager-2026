@@ -742,7 +742,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
             <div className="space-y-5">
               <div>
                 <p className="text-[#C9A84C]/70 text-[10px] font-black uppercase tracking-[0.35em] mb-1">Contact</p>
-                <p className="text-white font-black text-lg">Uday Reddy</p>
+                <p className="text-white font-black text-lg">MiSPACE</p>
                 <p className="text-white/40 text-xs font-semibold">MiSpace UltraLuxury Paying Guest</p>
               </div>
               <div className="space-y-3">
@@ -755,6 +755,15 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
                   </a>
                 ))}
               </div>
+              <a
+                href="mailto:mispacepayingguest@gmail.com"
+                className="flex items-center gap-4 group"
+              >
+                <div className="w-10 h-10 bg-[#C9A84C]/15 border border-[#C9A84C]/30 rounded-xl flex items-center justify-center shrink-0 group-hover:bg-[#C9A84C]/25 transition">
+                  <Mail className="w-4 h-4 text-[#C9A84C]" />
+                </div>
+                <span className="text-white text-sm font-bold group-hover:text-[#C9A84C] transition">mispacepayingguest@gmail.com</span>
+              </a>
               <a
                 href="https://maps.google.com/?q=17.266462,78.387588"
                 target="_blank"
@@ -1165,16 +1174,20 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
           <div className="w-full h-px bg-white/8" />
 
           {/* Contact grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center sm:text-left">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-6 text-center sm:text-left">
             <div className="space-y-1">
               <p className="text-[10px] font-black uppercase tracking-[0.25em]" style={{ color: GOLD }}>Contact Person</p>
-              <p className="text-white font-bold text-sm">Uday Reddy</p>
+              <p className="text-white font-bold text-sm">MiSPACE</p>
               <p className="text-white/40 text-xs">MiSpace UltraLuxury Paying Guest</p>
             </div>
             <div className="space-y-1">
               <p className="text-[10px] font-black uppercase tracking-[0.25em]" style={{ color: GOLD }}>Phone</p>
               <a href="tel:+919257575748" className="block text-white font-bold text-sm hover:text-[#C9A84C] transition">+91 92 57 57 57 48</a>
               <a href="tel:+919257575749" className="block text-white font-bold text-sm hover:text-[#C9A84C] transition">+91 92 57 57 57 49</a>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-black uppercase tracking-[0.25em]" style={{ color: GOLD }}>Email</p>
+              <a href="mailto:mispacepayingguest@gmail.com" className="block text-white font-bold text-sm hover:text-[#C9A84C] transition break-all">mispacepayingguest@gmail.com</a>
             </div>
             <div className="space-y-1">
               <p className="text-[10px] font-black uppercase tracking-[0.25em]" style={{ color: GOLD }}>Location</p>
