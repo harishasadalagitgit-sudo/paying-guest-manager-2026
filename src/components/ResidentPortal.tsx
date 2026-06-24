@@ -27,7 +27,7 @@ const MiSpaceTextBrand = ({ theme = "light" }: { theme?: "light" | "dark" }) => 
 };
 
 // ── Resident Login screen ──────────────────────────────────────────────────────
-function ResidentLogin({ onFound }: { onFound: (r: Resident) => void }) {
+function ResidentLogin({ onFound, onBack }: { onFound: (r: Resident) => void; onBack: () => void }) {
   const [mobile, setMobile] = useState("");
   const [fullName, setFullName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -143,6 +143,15 @@ function ResidentLogin({ onFound }: { onFound: (r: Resident) => void }) {
               {loading ? <><Clock className="w-4 h-4 animate-spin" /> Verifying...</> : <><ChevronRight className="w-4 h-4" /> Login to My Account</>}
             </button>
           </form>
+        </div>
+
+        <div className="text-center mt-6">
+          <button
+            onClick={onBack}
+            className="text-xs font-bold text-white/40 hover:text-white transition-colors cursor-pointer"
+          >
+            &larr; Back to Home Page
+          </button>
         </div>
       </div>
     </div>
@@ -393,6 +402,6 @@ function fileToBase64(file: File): Promise<string> {
 export default function ResidentPortal({ onBack }: { onBack: () => void }) {
   const [resident, setResident] = useState<Resident | null>(null);
 
-  if (!resident) return <ResidentLogin onFound={setResident} />;
+  if (!resident) return <ResidentLogin onFound={setResident} onBack={onBack} />;
   return <ResidentDashboard resident={resident} onLogout={() => { setResident(null); onBack(); }} />;
 }

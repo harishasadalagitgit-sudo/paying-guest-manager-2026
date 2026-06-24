@@ -191,7 +191,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
 
   const pgImages = [
     {
-      url: "/pgbeds.png",
+      url: "/MiSpaceBedPicLatest.png",
       title: "Luxury Rooms",
       desc: "Perfectly designed spacious rooms with premium beds and modern comforts.",
     },
@@ -315,7 +315,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
 
         <div className="max-w-7xl mx-auto relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
 
-          <div className="space-y-8">
+          <div className="space-y-8 order-2 lg:order-1">
             <div>
               <div className="flex flex-col items-center gap-3">
                 <MiSpaceCircleMark size={80} bg="transparent" />
@@ -397,13 +397,13 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
             </div>
           </div>
 
-          <div className="space-y-3" id="carousel-visuals">
+          <div className="space-y-3 order-1 lg:order-2" id="carousel-visuals">
             <div className="relative aspect-[4/3] overflow-hidden rounded-3xl shadow-2xl shadow-amber-900/40 border border-white/10 bg-slate-900">
               <img
                 src={pgImages[activeImageTab].url}
                 alt={pgImages[activeImageTab].title}
                 referrerPolicy="no-referrer"
-                className="w-full h-full object-cover transition-all duration-700 ease-in-out"
+                className="w-full h-full object-contain transition-all duration-700 ease-in-out"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent flex flex-col justify-end p-7">
                 <h3 className="text-xl font-black text-white mb-1">{pgImages[activeImageTab].title}</h3>
