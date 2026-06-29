@@ -155,6 +155,19 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
   const [bkNotes, setBkNotes] = useState("");
   const [bkSubmitting, setBkSubmitting] = useState(false);
   const [bkSuccess, setBkSuccess] = useState(false);
+  const [showHotelSection, setShowHotelSection] = useState(false);
+  const [showContactSection, setShowContactSection] = useState(false);
+
+  const openHotelSection = () => {
+    setShowHotelSection(true);
+    setTimeout(() => {
+      document.getElementById("hotel-section")?.scrollIntoView({ behavior: "smooth" });
+    }, 50);
+  };
+
+  const openContactSection = () => {
+    document.getElementById("visitor-footer")?.scrollIntoView({ behavior: "smooth" });
+  };
   const [bkError, setBkError] = useState("");
 
   const bkMaxGuests = bkRooms * 3;
@@ -257,13 +270,21 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
           More than a stay, a feeling of home
         </p>
         <div className="flex items-center gap-1.5 sm:gap-2.5">
-          <a
-            href="#contact-section"
-            className="inline-flex items-center gap-1.5 font-black text-xs px-2.5 py-2.5 sm:px-4 rounded-full transition-all duration-200 hover:brightness-110"
+          <button
+            onClick={openContactSection}
+            className="inline-flex items-center gap-1.5 font-black text-xs px-2.5 py-2.5 sm:px-4 rounded-full transition-all duration-200 hover:brightness-110 cursor-pointer"
             style={{ background: GOLD, color: "#1a1200", boxShadow: `0 2px 10px ${GOLD}55` }}
           >
             <MapPin className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Contact</span>
+          </button>
+          <a
+            href="/facilities.html"
+            className="inline-flex items-center gap-1.5 font-black text-xs px-2.5 py-2.5 sm:px-4 rounded-full transition-all duration-200 hover:brightness-110"
+            style={{ background: GOLD, color: "#1a1200", boxShadow: `0 2px 10px ${GOLD}55` }}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Facilities</span>
           </a>
           <button
             onClick={() => setShowGallery(true)}
@@ -273,14 +294,14 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
             <Star className="w-3.5 h-3.5 fill-current" />
             <span className="hidden sm:inline">Gallery</span>
           </button>
-          <a
-            href="#enquiry-section"
-            className="inline-flex items-center gap-1.5 font-black text-xs px-2.5 py-2.5 sm:px-4 rounded-full transition-all duration-200 shadow-sm hover:brightness-110"
+          <button
+            onClick={openHotelSection}
+            className="inline-flex items-center gap-1.5 font-black text-xs px-2.5 py-2.5 sm:px-4 rounded-full transition-all duration-200 shadow-sm hover:brightness-110 cursor-pointer"
             style={{ background: GOLD, color: "#1a1200", boxShadow: `0 2px 10px ${GOLD}55` }}
           >
             <Calendar className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Book a Visit</span>
-          </a>
+          </button>
           <button
             onClick={onSwitchToResident}
             className="inline-flex items-center gap-1.5 font-black text-xs px-2.5 py-2.5 sm:px-4 rounded-full transition-all duration-200 cursor-pointer hover:brightness-110"
@@ -400,14 +421,14 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
                 <Calendar className="w-4 h-4" />
                 Book PG Visit / Enquiry
               </a>
-              <a
-                href="#hotel-section"
-                className="font-black flex items-center justify-center gap-2 px-7 py-4 rounded-2xl transition-all duration-200 shadow-lg text-sm text-white"
+              <button
+                onClick={openHotelSection}
+                className="font-black flex items-center justify-center gap-2 px-7 py-4 rounded-2xl transition-all duration-200 shadow-lg text-sm text-white cursor-pointer"
                 style={{ background: GOLD, boxShadow: `0 8px 28px ${GOLD}55` }}
               >
                 <Hotel className="w-4 h-4" />
                 Book Hotel Room
-              </a>
+              </button>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-3.5 bg-white/8 border border-white/12 backdrop-blur-sm px-5 py-3.5 rounded-2xl">
@@ -470,273 +491,8 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
         </div>
       </section>
 
-      {/* ── AUTHENTIC HOMELY FOOD ── */}
-      <section
-        className="relative overflow-hidden py-20 px-5 md:px-14 lg:px-24"
-        style={{ background: CREAM }}
-      >
-        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-14 items-center">
-          <div className="space-y-7">
-            <div className="inline-flex items-center gap-2.5 bg-[#C9A84C]/12 border border-[#C9A84C]/30 rounded-full px-4 py-2">
-              <Utensils className="w-4 h-4 text-[#C9A84C]" />
-              <span className="text-[#C9A84C] text-xs font-bold uppercase tracking-[0.18em]">Fresh • Hygienic • Nutritious</span>
-            </div>
-            <div>
-              <div className="text-2xl sm:text-3xl md:text-4xl font-black text-[#2F3F5E] leading-none tracking-tight">AUTHENTIC</div>
-              <div className="text-2xl sm:text-3xl md:text-4xl font-black leading-none tracking-tight">
-                <span style={{ color: "#C9A84C" }}>HOMELY FOOD</span>
-              </div>
-            </div>
-            <div className="space-y-1.5 text-slate-600 text-base font-medium">
-              <p>Nutritious • Hygienic • Fresh</p>
-              <p>Prepared with Care,</p>
-              <p className="text-[#C9A84C] font-bold text-xl">Every Single Day.</p>
-            </div>
-            <div className="space-y-3 pt-2">
-              {[
-                "Breakfast, Lunch & Dinner Included",
-                "Pure RO Water Dispensers on Every Floor",
-                "Festive Specials & Sunday Celebrations",
-              ].map((item) => (
-                <div key={item} className="flex items-center gap-3">
-                  <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: GOLD }}></div>
-                  <span className="text-slate-700 text-sm font-medium">{item}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="relative">
-            <div className="rounded-3xl overflow-hidden shadow-2xl border border-white/10" style={{ aspectRatio: "16/10" }}>
-              <img
-                src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=1200"
-                alt="Rooftop Restaurant & Garden"
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <div className="absolute bottom-5 left-5 right-5 bg-black/70 backdrop-blur-sm rounded-2xl px-5 py-3.5 flex items-center gap-4 border border-white/10">
-              <div className="w-9 h-9 bg-amber-500 rounded-xl flex items-center justify-center shrink-0">
-                <MapPin className="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <p className="text-white font-black text-sm tracking-wide">ROOF TOP RESTAURANT & GARDEN</p>
-                <p className="text-white/55 text-xs">Relax, dine & unwind with a breathtaking view.</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── BUILT FOR COMFORT ── */}
-      <section className="py-16 px-5 md:px-14 lg:px-24" style={{ background: "#002147" }}>
-        <div className="max-w-7xl mx-auto">
-          <p className="text-center text-[11px] font-black text-[#C9A84C]/70 uppercase tracking-[0.35em] mb-12">
-            — Built for Your Comfort &amp; Well-Being —
-          </p>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            {[
-              { icon: Wind, title: "100% Ventilation", sub: "& Lighting" },
-              { icon: Dumbbell, title: "GYM", sub: "Stay Fit, Stay Strong" },
-              { icon: Leaf, title: "YOGA ROOM", sub: "Refresh Your Mind & Body" },
-              { icon: Tv, title: "TV LOUNGE", sub: "Unwind, Relax & Recharge" },
-              { icon: Gamepad2, title: "Indoor Games", sub: "Snooker, Table Tennis & More" },
-              { icon: Utensils, title: "Self Cooking", sub: "Cook Your Own Meals Anytime" },
-            ].map(({ icon: Icon, title, sub }) => (
-              <div
-                key={title}
-                className="group flex flex-col items-center text-center gap-4 p-6 rounded-2xl border border-[#C9A84C]/20 hover:border-[#C9A84C]/60 hover:bg-white/5 transition-all duration-200 cursor-default bg-white/8"
-              >
-                <div className="w-16 h-16 bg-[#C9A84C]/10 group-hover:bg-[#C9A84C]/20 border border-[#C9A84C]/30 group-hover:border-[#C9A84C]/60 rounded-2xl flex items-center justify-center transition-all duration-200">
-                  <Icon className="w-8 h-8 text-[#C9A84C] group-hover:text-[#C9A84C] transition-colors" />
-                </div>
-                <div>
-                  <p className="font-black text-white text-[11px] uppercase tracking-wide leading-tight mb-1">{title}</p>
-                  <p className="text-white/40 text-[10px] leading-snug font-medium">{sub}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── MORE THAN JUST A STAY ── */}
-      <section className="py-16 px-5 md:px-14 lg:px-24" style={{ background: CREAM }}>
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <p className="text-[11px] font-black text-[#2F3F5E]/40 uppercase tracking-[0.35em] mb-3">
-              — More Than Just a Stay —
-            </p>
-            <div className="inline-flex items-center gap-2 bg-amber-500 text-white font-bold text-xs px-5 py-2 rounded-full shadow-md shadow-[#C9A84C]/40">
-              <Star className="w-3.5 h-3.5" />
-              Indoor Games &amp; Recreation Available
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-5">
-            {[
-              { img: "/MiSpaceLoungeSofa.png", icon: Tv, label: "LUXURIOUS TV LOUNGE SPACE", sub: "Unwind. Relax. Recharge" },
-              { img: "https://images.unsplash.com/photo-1571902943202-507ec2618e8f?auto=format&fit=crop&q=80&w=800", icon: Dumbbell, label: "FULLY EQUIPPED GYM", sub: "Stay Fit, Stay Strong" },
-              { img: "/MiSpaceHotDesks.png", icon: Sparkles, label: "HOT DESKS", sub: "Work Smart, Work Comfortably" },
-            ].map(({ img, icon: Icon, label, sub }) => (
-              <div
-                key={label}
-                className="group relative overflow-hidden rounded-2xl shadow-md border border-[#C9A84C]/15 hover:shadow-xl transition-all duration-300 cursor-default"
-                style={{ aspectRatio: "4/3" }}
-              >
-                <img src={img} alt={label} referrerPolicy="no-referrer" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent"></div>
-                <div className="absolute bottom-0 left-0 right-0 p-5">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-6 h-6 bg-[#C9A84C]/90 rounded-lg flex items-center justify-center shrink-0">
-                      <Icon className="w-3 h-3 text-white" />
-                    </div>
-                    <span className="text-white font-black text-xs uppercase tracking-wider">{label}</span>
-                  </div>
-                  <p className="text-white/60 text-xs font-medium ml-8">{sub}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-            {[
-              { img: "/pgsnookertable.png", icon: Star, label: "SNOOKER ZONE", sub: "Play & Enjoy — All Day Fun", tag: "Indoor Game" },
-              { img: "https://images.unsplash.com/photo-1534158914592-062992fbe900?auto=format&fit=crop&q=80&w=900", icon: Star, label: "TABLE TENNIS", sub: "Sharpen Your Focus, One Rally at a Time", tag: "Indoor Game" },
-              { img: "/MiSpaceIndoorFootball.png", icon: Star, label: "INDOOR FOOTBALL", sub: "Kick Off & Have Fun", tag: "Indoor Game" },
-            ].map(({ img, icon: Icon, label, sub, tag }) => (
-              <div
-                key={label}
-                className="group relative overflow-hidden rounded-2xl shadow-md border border-[#C9A84C]/15 hover:shadow-xl transition-all duration-300 cursor-default"
-                style={{ aspectRatio: "16/7" }}
-              >
-                <img src={img} alt={label} referrerPolicy="no-referrer" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent"></div>
-                <div className="absolute top-4 left-4">
-                  <span className="bg-amber-500 text-white text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full">{tag}</span>
-                </div>
-                <div className="absolute bottom-0 left-0 right-0 p-5">
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-6 h-6 bg-[#C9A84C]/90 rounded-lg flex items-center justify-center shrink-0">
-                      <Icon className="w-3 h-3 text-white" />
-                    </div>
-                    <span className="text-white font-black text-xs uppercase tracking-wider">{label}</span>
-                  </div>
-                  <p className="text-white/60 text-xs font-medium ml-8">{sub}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── WASHING MACHINES + CCTV ── */}
-      <section className="py-14 px-5 md:px-14 lg:px-24" style={{ background: "#002147" }}>
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-6">
-          {[
-            {
-              img: "/pgwashingmachine.png",
-              icon: WashingMachine,
-              label: "WASHING MACHINES",
-              sub: "Clean. Convenient. Anytime.",
-              desc: "State-of-the-art washing machines available around the clock — keeping your laundry fresh and easy.",
-            },
-            {
-              img: "/MiSpaceCCTV.png",
-              icon: Video,
-              label: "24 HRS CCTV SURVEILLANCE",
-              sub: "Your Safety, Our Priority.",
-              desc: "HD cameras cover every corner of the premises, 24 hours a day. Your safety is always in sharp focus.",
-            },
-          ].map(({ img, icon: Icon, label, sub, desc }) => (
-            <div
-              key={label}
-              className="group flex rounded-2xl overflow-hidden border border-[#C9A84C]/20 hover:border-[#C9A84C]/40 transition-all duration-300 bg-white/6"
-            >
-              <div className="w-40 sm:w-48 shrink-0 overflow-hidden">
-                <img src={img} alt={label} referrerPolicy="no-referrer" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-              </div>
-              <div className="flex flex-col justify-center px-5 py-5 flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <Icon className="w-4 h-4 text-[#C9A84C] shrink-0" />
-                  <span className="text-white font-black text-[11px] uppercase tracking-wider">{label}</span>
-                </div>
-                <p className="text-[#C9A84C] font-bold text-sm mb-2">{sub}</p>
-                <p className="text-white/55 text-xs leading-relaxed">{desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ── INFO BENTO ── */}
-      <section className="py-16 px-5 md:px-14 lg:px-24" style={{ background: CREAM }} id="features-highlights">
-        <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
-          {[
-            {
-              icon: Utensils,
-              title: "Home Kitchen Dining",
-              desc: "Hygiene-certified meals. Multi-cuisine North & South Indian food cooked 3 times daily.",
-              bullets: ["Breakfast, Lunch & Dinner Included", "Pure RO Water on Every Floor", "Festive Specials on Sundays"],
-            },
-            {
-              icon: ShieldCheck,
-              title: "Pristine & Safe Living",
-              desc: "Your luxury PG experience is built around peaceful safety and spotless cleanliness, with daily professional housekeeping.",
-              bullets: ["24/7 Security Guards & Active CCTV", "Daily Room & Bathroom Sanitization", "Unlimited HiSpeed Internet & Power Backup"],
-            },
-            {
-              icon: MapPin,
-              title: "Prime Accessible Location",
-              desc: "Strategically located with easy access to key destinations. 10 minutes drive to International Airport. 19 minutes to HiTech City. All facilities available nearby.",
-              bullets: [],
-              contact: true,
-            },
-          ].map(({ icon: Icon, title, desc, bullets, contact }) => (
-            <div
-              key={title}
-              className="bg-white p-7 rounded-2xl border border-[#C9A84C]/20 shadow-sm shadow-stone-200/60 hover:shadow-md hover:shadow-stone-300/40 transition-all duration-200 flex flex-col"
-            >
-              <div className="inline-flex bg-amber-50 border border-[#C9A84C]/25 p-3 rounded-xl mb-5 text-[#A8883A] w-fit">
-                <Icon className="w-6 h-6" />
-              </div>
-              <h3 className="text-base font-black text-slate-900 mb-3 tracking-tight">{title}</h3>
-              <p className="text-sm text-slate-600 mb-5 leading-relaxed flex-1">{desc}</p>
-              {bullets.length > 0 ? (
-                <ul className="space-y-2.5 border-t border-[#C9A84C]/15 pt-4">
-                  {bullets.map((b) => (
-                    <li key={b} className="flex items-center gap-2 text-xs font-semibold text-slate-600">
-                      <CheckCircle className="w-3.5 h-3.5 text-[#C9A84C] shrink-0" />
-                      {b}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="space-y-3 border-t border-[#C9A84C]/15 pt-4">
-                  {[
-                    { icon: MapPin, text: "Shamshabad RB Nagar, Street No 4, Hyderabad, Telangana", href: undefined },
-                    { icon: Mail, text: "mispacepayingguest@gmail.com", href: "mailto:mispacepayingguest@gmail.com" },
-                    { icon: Phone, text: "+91 92 57 57 57 48", href: "tel:+919257575748" },
-                    { icon: Phone, text: "+91 92 57 57 57 49", href: "tel:+919257575749" },
-                  ].map(({ icon: CIcon, text, href }) => (
-                    <div key={text} className="flex items-start gap-2 text-xs text-slate-600">
-                      <CIcon className="w-3.5 h-3.5 text-[#C9A84C] shrink-0 mt-0.5" />
-                      {href ? (
-                        <a href={href} className="font-medium leading-snug hover:text-[#C9A84C] transition-colors">{text}</a>
-                      ) : (
-                        <span className="font-medium leading-snug">{text}</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
-
       {/* ── CONTACT STRIP ── */}
-      <section className="py-16 px-5 md:px-14 lg:px-24" style={{ background: "#002147" }} id="contact-section">
+      {showContactSection && <section className="py-16 px-5 md:px-14 lg:px-24" style={{ background: "#002147" }} id="contact-section">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center mb-12">
             <div className="space-y-5">
@@ -804,7 +560,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
             ))}
           </div>
         </div>
-      </section>
+      </section>}
 
       {/* ── ENQUIRY FORM ── */}
       <section
@@ -936,8 +692,39 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
         </div>
       </section>
 
+      {/* ── BUILT FOR COMFORT ── */}
+      <section className="py-16 px-5 md:px-14 lg:px-24" style={{ background: "#002147" }}>
+        <div className="max-w-7xl mx-auto">
+          <p className="text-center text-[11px] font-black text-[#C9A84C]/70 uppercase tracking-[0.35em] mb-12">
+            — Built for Your Comfort &amp; Well-Being —
+          </p>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {[
+              { icon: Wind, title: "100% Ventilation", sub: "& Lighting" },
+              { icon: Dumbbell, title: "GYM", sub: "Stay Fit, Stay Strong" },
+              { icon: Tv, title: "TV LOUNGE", sub: "Unwind, Relax & Recharge" },
+              { icon: Gamepad2, title: "Indoor Games", sub: "Snooker, Table Tennis & More" },
+              { icon: Utensils, title: "Self Cooking", sub: "Cook Your Own Meals Anytime" },
+            ].map(({ icon: Icon, title, sub }) => (
+              <div
+                key={title}
+                className="group flex flex-col items-center text-center gap-4 p-6 rounded-2xl border border-[#C9A84C]/20 hover:border-[#C9A84C]/60 hover:bg-white/5 transition-all duration-200 cursor-default bg-white/8"
+              >
+                <div className="w-16 h-16 bg-[#C9A84C]/10 group-hover:bg-[#C9A84C]/20 border border-[#C9A84C]/30 group-hover:border-[#C9A84C]/60 rounded-2xl flex items-center justify-center transition-all duration-200">
+                  <Icon className="w-8 h-8 text-[#C9A84C] group-hover:text-[#C9A84C] transition-colors" />
+                </div>
+                <div>
+                  <p className="font-black text-white text-[11px] uppercase tracking-wide leading-tight mb-1">{title}</p>
+                  <p className="text-white/40 text-[10px] leading-snug font-medium">{sub}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── HOTEL BOOKING SECTION ── */}
-      <section
+      {showHotelSection && <section
         className="py-20 px-5 md:px-14 lg:px-24"
         id="hotel-section"
         style={{ background: CREAM }}
@@ -1083,7 +870,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
             </div>
           </div>
         </div>
-      </section>
+      </section>}
 
       {/* ── FLOATING ENQUIRY BUTTON ── */}
       <a

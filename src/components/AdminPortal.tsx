@@ -254,10 +254,22 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
   const [payMode, setPayMode] = useState<"Cash" | "UPI" | "Bank Transfer">("UPI");
   const [payNotes, setPayNotes] = useState("");
 
-  // ID Upload Temp Form
+  // ID Upload Temp Form (dossier panel)
   const [uploadedIdName, setUploadedIdName] = useState("");
   const [uploadedIdType, setUploadedIdType] = useState("Aadhaar Card");
   const [uploadedBase64, setUploadedBase64] = useState("");
+
+  // ID Upload inside Add/Edit Resident form
+  const [formIdType, setFormIdType] = useState("Aadhaar Card");
+  const [formIdName, setFormIdName] = useState("");
+  const [formIdBase64, setFormIdBase64] = useState("");
+
+  // Exit Resident Modal
+  const [exitResidentId, setExitResidentId] = useState<string | null>(null);
+  const [exitIdType, setExitIdType] = useState("Aadhaar Card");
+  const [exitIdName, setExitIdName] = useState("");
+  const [exitIdBase64, setExitIdBase64] = useState("");
+  const [exitIsProcessing, setExitIsProcessing] = useState(false);
 
   // Seed loading state
   const [isSeeding, setIsSeeding] = useState(false);
@@ -806,13 +818,36 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
       };
 
       if (isEditingResidentId) {
-        // Updating existing resident
+        // Preserve existing idsJson; optionally append a new ID if one was uploaded in the form
+        const existingResident = residents.find(r => r.id === isEditingResidentId);
+        const existingIds: ResidentID[] = existingResident?.idsJson ? JSON.parse(existingResident.idsJson) : [];
+        if (formIdBase64 && formIdName) {
+          existingIds.push({
+            id: "id_" + Date.now(),
+            type: formIdType,
+            idName: formIdName,
+            fileData: formIdBase64,
+            uploadedAt: new Date().toLocaleDateString()
+          });
+        }
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { paymentHistoryJson: _ph, idsJson: _ids, ...editableFields } = activeResidentData;
         const residentDocRef = doc(db, "residents", isEditingResidentId);
-        await updateDoc(residentDocRef, activeResidentData);
+        await updateDoc(residentDocRef, { ...editableFields, idsJson: JSON.stringify(existingIds) });
         alert("Resident profile updated successfully.");
       } else {
-        // Creating new resident
-        await addDoc(collection(db, "residents"), activeResidentData);
+        // Creating new resident — optionally attach the first ID
+        const newIds: ResidentID[] = [];
+        if (formIdBase64 && formIdName) {
+          newIds.push({
+            id: "id_" + Date.now(),
+            type: formIdType,
+            idName: formIdName,
+            fileData: formIdBase64,
+            uploadedAt: new Date().toLocaleDateString()
+          });
+        }
+        await addDoc(collection(db, "residents"), { ...activeResidentData, idsJson: JSON.stringify(newIds) });
         alert("New resident registered into the PG system successfully.");
       }
 
@@ -846,15 +881,50 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
     setIsAddingResident(true);
   };
 
-  const deleteResident = async (resId: string) => {
-    if (!window.confirm("Are you sure you want to checkout and delete this resident? Outstanding dues must be cleared first.")) return;
+  const openExitModal = (resId: string) => {
+    setExitResidentId(resId);
+    setExitIdType("Aadhaar Card");
+    setExitIdName("");
+    setExitIdBase64("");
+  };
+
+  const cancelExitModal = () => {
+    setExitResidentId(null);
+    setExitIdBase64("");
+    setExitIdName("");
+  };
+
+  const confirmExitResident = async () => {
+    if (!exitResidentId) return;
+    setExitIsProcessing(true);
     try {
-      await deleteDoc(doc(db, "residents", resId));
+      // If an exit ID was uploaded, save it to the resident record before deleting
+      if (exitIdBase64 && exitIdName) {
+        const activeResident = residents.find(r => r.id === exitResidentId);
+        if (activeResident) {
+          const currentIds: ResidentID[] = activeResident.idsJson ? JSON.parse(activeResident.idsJson) : [];
+          currentIds.push({
+            id: "exit_id_" + Date.now(),
+            type: exitIdType,
+            idName: "[EXIT] " + exitIdName,
+            fileData: exitIdBase64,
+            uploadedAt: new Date().toLocaleDateString()
+          });
+          await updateDoc(doc(db, "residents", exitResidentId), {
+            idsJson: JSON.stringify(currentIds)
+          });
+        }
+      }
+      await deleteDoc(doc(db, "residents", exitResidentId));
       setSelectedResidentId(null);
-      alert("Resident checked out and profile records archived.");
+      setExitResidentId(null);
+      setExitIdBase64("");
+      setExitIdName("");
       await runOccupancyRebuilder();
     } catch (e: any) {
-      alert("Error removing resident: " + e.message);
+      alert("Error during resident exit: " + e.message);
+    } finally {
+      setExitIsProcessing(false);
     }
   };
 
@@ -873,6 +943,9 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
     setResBedNum(0);
     setResNotes("");
     setResPhoto("");
+    setFormIdType("Aadhaar Card");
+    setFormIdName("");
+    setFormIdBase64("");
   };
 
   // Add a reminder
@@ -1106,9 +1179,8 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
     }
   };
 
-  // Filtered rooms — hostel only (excludes floor 5 hotel rooms)
+  // Filtered rooms — all rooms are hostel rooms
   const filteredRooms = rooms.filter((room) => {
-    if (room.floor === 5) return false;
     const isFloorMatch = selectedFloor === "All" || room.floor.toString() === selectedFloor;
     const isQueryMatch = roomQuery === "" || room.roomNum.toLowerCase().includes(roomQuery.toLowerCase());
 
@@ -1120,8 +1192,8 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
     return isFloorMatch && isQueryMatch && isStatusMatch;
   });
 
-  // Hotel rooms (floor 5 only)
-  const hotelRooms = rooms.filter(r => r.floor === 5);
+  // Hotel rooms — disabled, all rooms are now hostel rooms
+  const hotelRooms: Room[] = [];
 
   // Filtered residents
   const filteredResidents = residents.filter((res) => {
@@ -1217,21 +1289,9 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
             >
               <Bed className="w-4 h-4 shrink-0" />
               <span className="flex-1 text-left">PG Hostel Rooms</span>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${activeTab === "rooms" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"}`}>{rooms.filter(r => r.floor !== 5).length}</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${activeTab === "rooms" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-700"}`}>{rooms.length}</span>
             </button>
 
-            <button
-              onClick={() => { setActiveTab("hotel"); setSelectedResidentId(null); setSelectedRoomNum(null); }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition duration-150 cursor-pointer ${
-                activeTab === "hotel"
-                  ? "bg-amber-600 text-white shadow-lg shadow-amber-900/20"
-                  : "text-slate-600 hover:bg-amber-50 hover:text-amber-800"
-              }`}
-            >
-              <Hotel className="w-4 h-4 shrink-0" />
-              <span className="flex-1 text-left">Hotel Rooms</span>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${activeTab === "hotel" ? "bg-white/20 text-white" : "bg-amber-100 text-amber-700"}`}>{rooms.filter(r => r.floor === 5).length}</span>
-            </button>
 
             <button
               onClick={() => { setActiveTab("residents"); setSelectedResidentId(null); setSelectedRoomNum(null); }}
@@ -1495,11 +1555,6 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                 <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                   <h3 className="text-sm font-black text-slate-850 uppercase tracking-wider">Quick Room Vacancy Checker</h3>
                   <div className="flex items-center gap-3">
-                    <button onClick={() => setActiveTab("hotel")} className="text-xs font-bold text-amber-600 hover:underline flex items-center gap-1">
-                      <Hotel className="w-3.5 h-3.5" />
-                      <span>Hotel Rooms</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
                     <button onClick={() => setActiveTab("rooms")} className="text-xs font-bold text-indigo-600 hover:underline flex items-center gap-1">
                       <span>All Hostel Rooms</span>
                       <ArrowRight className="w-3.5 h-3.5" />
@@ -1616,16 +1671,17 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="text-[9px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-md">Floor {room.floor}</span>
-                              <button
-                                onClick={async () => {
-                                  const newAc = acType === "AC" ? "Non-AC" : "AC";
-                                  await setDoc(doc(db, "rooms", room.roomNum), { acType: newAc }, { merge: true });
+                              <select
+                                value={acType}
+                                onChange={async (e) => {
+                                  await setDoc(doc(db, "rooms", room.roomNum), { acType: e.target.value }, { merge: true });
                                 }}
-                                className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border cursor-pointer transition ${acType === "AC" ? "bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200" : "bg-orange-50 text-orange-600 border-orange-200 hover:bg-orange-100"}`}
-                                title="Click to toggle AC/Non-AC"
+                                onClick={(e) => e.stopPropagation()}
+                                className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md border cursor-pointer transition appearance-none ${acType === "AC" ? "bg-blue-100 text-blue-700 border-blue-200" : "bg-orange-50 text-orange-600 border-orange-200"}`}
                               >
-                                {acType === "AC" ? "❄ AC" : "Non-AC"}
-                              </button>
+                                <option value="AC">❄ AC</option>
+                                <option value="Non-AC">Non-AC</option>
+                              </select>
                               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md border bg-slate-100 text-slate-600 border-slate-200">Hostel</span>
                             </div>
                             <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${statusBadge}`}>
@@ -2003,7 +2059,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                         <div className="flex gap-2">
                           <label className="flex-1 flex items-center justify-center gap-2 h-12 border-2 border-dashed border-indigo-200 rounded-xl cursor-pointer bg-indigo-50 hover:bg-indigo-100 transition">
                             <Upload className="w-4 h-4 text-indigo-500" />
-                            <span className="text-xs font-bold text-indigo-600">Upload file</span>
+                            <span className="text-xs font-bold text-indigo-600">Upload Profile Pic</span>
                             <input type="file" accept="image/*" className="hidden" onChange={async (e) => {
                               const file = e.target.files?.[0];
                               if (!file) return;
@@ -2018,7 +2074,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                           <button type="button" onClick={() => { setCameraTarget("resident"); startCamera(); }}
                             className="flex-1 flex items-center justify-center gap-2 h-12 border-2 border-dashed border-emerald-200 rounded-xl bg-emerald-50 hover:bg-emerald-100 transition cursor-pointer">
                             <Camera className="w-4 h-4 text-emerald-600" />
-                            <span className="text-xs font-bold text-emerald-700">Use Camera</span>
+                            <span className="text-xs font-bold text-emerald-700">Capture Profile Pic</span>
                           </button>
                         </div>
                         <p className="text-[10px] text-slate-400">Any size — auto-compressed before saving</p>
@@ -2213,6 +2269,76 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                     </div>
                   </div>
 
+                  {/* ID Proof Upload */}
+                  <div className="space-y-3 bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                    <p className="text-[11px] font-black text-slate-700 uppercase tracking-wider">
+                      {isEditingResidentId ? "Upload Additional ID Proof" : "Attach ID Proof"}{" "}
+                      <span className="text-slate-400 font-semibold normal-case">(optional)</span>
+                    </p>
+                    {isEditingResidentId && (() => {
+                      const existingRes = residents.find(r => r.id === isEditingResidentId);
+                      const existingIds: ResidentID[] = existingRes?.idsJson ? JSON.parse(existingRes.idsJson) : [];
+                      if (existingIds.length === 0) return null;
+                      return (
+                        <div className="flex flex-wrap gap-1.5 mb-1">
+                          {existingIds.map(card => (
+                            <span key={card.id} className="text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full font-semibold">
+                              {card.type}: {card.idName}
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block mb-1">ID Type</label>
+                        <select
+                          value={formIdType}
+                          onChange={e => setFormIdType(e.target.value)}
+                          className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-2 font-semibold text-slate-800 focus:outline-none focus:border-indigo-400"
+                        >
+                          {["Aadhaar Card","College ID","Driving License","Pan Card","Other"].map(t => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block mb-1">ID Label</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Aadhaar 1234"
+                          value={formIdName}
+                          onChange={e => setFormIdName(e.target.value)}
+                          className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-2 font-semibold text-slate-800 focus:outline-none focus:border-indigo-400"
+                        />
+                      </div>
+                    </div>
+                    <div className="relative border border-dashed border-slate-300 bg-white rounded-xl p-3 text-center text-xs flex items-center justify-center gap-2 hover:bg-slate-50 transition cursor-pointer">
+                      <Upload className="w-4 h-4 text-slate-400" />
+                      <span className="text-slate-500 font-semibold">
+                        {formIdBase64 ? "✓ File ready" : "Choose document / photo..."}
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        className="absolute inset-0 opacity-0 cursor-pointer w-full"
+                        onChange={e => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          if (!formIdName) setFormIdName(file.name);
+                          const reader = new FileReader();
+                          reader.onload = ev => setFormIdBase64(ev.target?.result as string);
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </div>
+                    {formIdBase64 && (
+                      <p className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" /> ID will be saved with the profile.
+                      </p>
+                    )}
+                  </div>
+
                   <div className="flex gap-4 justify-end pt-3">
                     <button
                       type="button"
@@ -2303,7 +2429,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                                 <Edit3 className="w-3.5 h-3.5" />
                               </button>
                               <button
-                                onClick={() => deleteResident(res.id)}
+                                onClick={() => openExitModal(res.id)}
                                 className="p-2 bg-white hover:bg-red-50 text-red-600 border border-slate-250 rounded-lg transition"
                                 title="Checkout / Delete"
                                 type="button"
@@ -2974,8 +3100,8 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
             const pendingThisMonth = thisMonthPayments.reduce((s, p) => s + (p.balancePending || 0), 0);
             const pendingLastMonth = lastMonthPayments.reduce((s, p) => s + (p.balancePending || 0), 0);
 
-            // Outstanding rent = sum of balanceAmount across all hostel residents (floor != 5)
-            const hostelResidentRooms = new Set(rooms.filter(r => r.floor !== 5).map(r => r.roomNum));
+            // Outstanding rent = sum of balanceAmount across all hostel residents
+            const hostelResidentRooms = new Set(rooms.map(r => r.roomNum));
             const hostelResidents = residents.filter(r => hostelResidentRooms.has(r.roomNum));
             const outstandingRent = hostelResidents.reduce((s, r) => s + (Number(r.balanceAmount) || 0), 0);
             const residentsWithBalance = hostelResidents.filter(r => Number(r.balanceAmount) > 0);
@@ -3611,8 +3737,8 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
             });
 
             // Resident count for the period
-            // Hostel residents only (rooms not on floor 5)
-            const hostelRoomNums = new Set(rooms.filter(r => r.floor !== 5).map(r => r.roomNum));
+            // All rooms are hostel rooms
+            const hostelRoomNums = new Set(rooms.map(r => r.roomNum));
             // Present during period = joined on or before rangeEnd
             const residentsPresent = residents.filter(r =>
               hostelRoomNums.has(r.roomNum) && r.joiningDate <= rangeEnd
@@ -3768,20 +3894,11 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
 
                     {/* Occupancy Pie Charts */}
                     {(() => {
-                      const hostelRooms = rooms.filter(r => r.floor !== 5);
-                      const hotelRooms  = rooms.filter(r => r.floor === 5);
-
-                      const hostelTotalBeds    = hostelRooms.reduce((s, r) => s + (r.capacity || 0), 0);
-                      const hostelOccupied     = hostelRooms.reduce((s, r) => s + (r.occupiedCount || 0), 0);
-                      const hostelVacant       = hostelTotalBeds - hostelOccupied;
-
-                      const hotelTotal    = hotelRooms.length;
-                      const hotelOccupied = hotelRooms.filter(r => r.hotelStatus === "occupied").length;
-                      const hotelBooked   = hotelRooms.filter(r => r.hotelStatus === "booked").length;
-                      const hotelVacant   = hotelRooms.filter(r => !r.hotelStatus || r.hotelStatus === "vacant").length;
-
-                      const hostelPct = hostelTotalBeds > 0 ? Math.round((hostelOccupied / hostelTotalBeds) * 100) : 0;
-                      const hotelPct  = hotelTotal > 0 ? Math.round(((hotelOccupied + hotelBooked) / hotelTotal) * 100) : 0;
+                      const allRooms = rooms;
+                      const totalBeds    = allRooms.reduce((s, r) => s + (r.capacity || 0), 0);
+                      const totalOccupied = allRooms.reduce((s, r) => s + (r.occupiedCount || 0), 0);
+                      const totalVacant  = totalBeds - totalOccupied;
+                      const hostelPct = totalBeds > 0 ? Math.round((totalOccupied / totalBeds) * 100) : 0;
 
                       return (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -3790,68 +3907,31 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                             <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-4">Hostel Bed Occupancy</p>
                             <div className="flex items-center gap-6">
                               <DonutChart
-                                total={hostelTotalBeds}
+                                total={totalBeds}
                                 centerLabel={`${hostelPct}%`}
                                 segments={[
-                                  { value: hostelOccupied, color: "#6366f1", label: "Occupied" },
-                                  { value: hostelVacant,   color: "#e2e8f0", label: "Vacant"   },
+                                  { value: totalOccupied, color: "#6366f1", label: "Occupied" },
+                                  { value: totalVacant,   color: "#e2e8f0", label: "Vacant"   },
                                 ]}
                               />
                               <div className="space-y-2 flex-1">
                                 <div className="flex items-center gap-2">
                                   <span className="w-3 h-3 rounded-sm bg-indigo-500 flex-shrink-0" />
                                   <span className="text-xs text-slate-600">Occupied</span>
-                                  <span className="ml-auto font-black text-slate-800 text-sm">{hostelOccupied}</span>
+                                  <span className="ml-auto font-black text-slate-800 text-sm">{totalOccupied}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <span className="w-3 h-3 rounded-sm bg-slate-200 flex-shrink-0" />
                                   <span className="text-xs text-slate-600">Vacant</span>
-                                  <span className="ml-auto font-black text-slate-800 text-sm">{hostelVacant}</span>
+                                  <span className="ml-auto font-black text-slate-800 text-sm">{totalVacant}</span>
                                 </div>
                                 <div className="border-t border-slate-100 pt-1.5 flex items-center gap-2">
                                   <span className="text-[10px] text-slate-400">Total beds</span>
-                                  <span className="ml-auto font-black text-slate-700 text-xs">{hostelTotalBeds}</span>
+                                  <span className="ml-auto font-black text-slate-700 text-xs">{totalBeds}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <span className="text-[10px] text-slate-400">Rooms</span>
-                                  <span className="ml-auto font-black text-slate-700 text-xs">{hostelRooms.length}</span>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Hotel Pie */}
-                          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-4">Hotel Room Occupancy</p>
-                            <div className="flex items-center gap-6">
-                              <DonutChart
-                                total={hotelTotal}
-                                centerLabel={`${hotelPct}%`}
-                                segments={[
-                                  { value: hotelOccupied, color: "#3b82f6", label: "Occupied" },
-                                  { value: hotelBooked,   color: "#f59e0b", label: "Booked"   },
-                                  { value: hotelVacant,   color: "#e2e8f0", label: "Vacant"   },
-                                ]}
-                              />
-                              <div className="space-y-2 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="w-3 h-3 rounded-sm bg-blue-500 flex-shrink-0" />
-                                  <span className="text-xs text-slate-600">Occupied</span>
-                                  <span className="ml-auto font-black text-slate-800 text-sm">{hotelOccupied}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="w-3 h-3 rounded-sm bg-amber-400 flex-shrink-0" />
-                                  <span className="text-xs text-slate-600">Booked</span>
-                                  <span className="ml-auto font-black text-slate-800 text-sm">{hotelBooked}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="w-3 h-3 rounded-sm bg-slate-200 flex-shrink-0" />
-                                  <span className="text-xs text-slate-600">Vacant</span>
-                                  <span className="ml-auto font-black text-slate-800 text-sm">{hotelVacant}</span>
-                                </div>
-                                <div className="border-t border-slate-100 pt-1.5 flex items-center gap-2">
-                                  <span className="text-[10px] text-slate-400">Total rooms</span>
-                                  <span className="ml-auto font-black text-slate-700 text-xs">{hotelTotal}</span>
+                                  <span className="ml-auto font-black text-slate-700 text-xs">{allRooms.length}</span>
                                 </div>
                               </div>
                             </div>
@@ -4157,6 +4237,110 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
         </div>
 
       </div>
+
+      {/* ── Exit Resident Modal ── */}
+      {exitResidentId && (() => {
+        const exitRes = residents.find(r => r.id === exitResidentId);
+        if (!exitRes) return null;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5 border border-slate-200">
+              {/* Header */}
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Checkout Resident</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Exiting <strong>{exitRes.name}</strong> — Room {exitRes.roomNum}{exitRes.bedNum ? `, Bed ${exitRes.bedNum}` : ""}
+                  </p>
+                </div>
+                <button onClick={cancelExitModal} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* ID Proof Upload */}
+              <div className="space-y-3 bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                <p className="text-[11px] font-black text-slate-700 uppercase tracking-wider">Upload Exit ID Proof <span className="text-slate-400 font-semibold normal-case">(optional)</span></p>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block mb-1">ID Type</label>
+                    <select
+                      value={exitIdType}
+                      onChange={e => setExitIdType(e.target.value)}
+                      className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-2 font-semibold text-slate-800 focus:outline-none focus:border-indigo-400"
+                    >
+                      {["Aadhaar Card","College ID","Driving License","Pan Card","Other"].map(t => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block mb-1">ID Label</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Aadhaar 1234"
+                      value={exitIdName}
+                      onChange={e => setExitIdName(e.target.value)}
+                      className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-2 font-semibold text-slate-800 focus:outline-none focus:border-indigo-400"
+                    />
+                  </div>
+                </div>
+
+                <div className="relative border border-dashed border-slate-300 bg-white rounded-xl p-3 text-center text-xs flex items-center justify-center gap-2 hover:bg-slate-50 transition cursor-pointer">
+                  <Upload className="w-4 h-4 text-slate-400" />
+                  <span className="text-slate-500 font-semibold">
+                    {exitIdBase64 ? "✓ File ready to upload" : "Choose document / photo..."}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full"
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (!exitIdName) setExitIdName(file.name);
+                      const reader = new FileReader();
+                      reader.onload = ev => setExitIdBase64(ev.target?.result as string);
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                </div>
+                {exitIdBase64 && (
+                  <p className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" /> ID proof attached — will be saved to resident record before exit.
+                  </p>
+                )}
+              </div>
+
+              {/* Warning */}
+              <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700 font-semibold flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-red-500" />
+                <span>This will permanently remove the resident and update room occupancy. Ensure outstanding dues are cleared.</span>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3">
+                <button
+                  onClick={cancelExitModal}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-600 hover:bg-slate-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmExitResident}
+                  disabled={exitIsProcessing}
+                  className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-sm font-bold transition disabled:opacity-60 flex items-center justify-center gap-2"
+                >
+                  <LogOut className="w-4 h-4" />
+                  {exitIsProcessing ? "Processing..." : "Confirm Exit"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
     </div>
   );
 }
