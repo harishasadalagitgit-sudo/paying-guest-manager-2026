@@ -586,7 +586,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
       </section>}
 
       {/* ── FACILITIES CAROUSEL ── */}
-      <section className="py-10 md:py-20 px-3 md:px-14 lg:px-24" style={{ background: "#0e1a2e" }}>
+      <section className="py-6 md:py-20 px-3 md:px-14 lg:px-24" style={{ background: "#0e1a2e" }}>
         <div className="max-w-5xl mx-auto">
           <p className="text-center text-[11px] font-black text-[#C9A84C]/70 uppercase tracking-[0.35em] mb-6 md:mb-10">
             — Our Facilities —
