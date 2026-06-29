@@ -586,14 +586,14 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
       </section>}
 
       {/* ── FACILITIES CAROUSEL ── */}
-      <section className="py-20 px-5 md:px-14 lg:px-24" style={{ background: "#0e1a2e" }}>
+      <section className="py-10 md:py-20 px-3 md:px-14 lg:px-24" style={{ background: "#0e1a2e" }}>
         <div className="max-w-5xl mx-auto">
-          <p className="text-center text-[11px] font-black text-[#C9A84C]/70 uppercase tracking-[0.35em] mb-10">
+          <p className="text-center text-[11px] font-black text-[#C9A84C]/70 uppercase tracking-[0.35em] mb-6 md:mb-10">
             — Our Facilities —
           </p>
 
           {/* Main featured image */}
-          <div className="relative aspect-[16/9] overflow-hidden rounded-3xl shadow-2xl shadow-amber-900/40 border border-white/10 bg-slate-900">
+          <div className="relative aspect-[4/3] md:aspect-[16/9] overflow-hidden rounded-2xl md:rounded-3xl shadow-2xl shadow-amber-900/40 border border-white/10 bg-slate-900">
             <img
               key={activeFacilityTab}
               src={facilityImages[activeFacilityTab].url}
@@ -601,8 +601,8 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
               className="w-full h-full object-cover transition-all duration-700 ease-in-out"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent flex flex-col justify-end p-8">
-              <h3 className="text-2xl font-black text-white mb-1.5">{facilityImages[activeFacilityTab].title}</h3>
-              <p className="text-sm text-white/70 leading-relaxed">{facilityImages[activeFacilityTab].desc}</p>
+              <h3 className="text-lg md:text-2xl font-black text-white mb-1.5">{facilityImages[activeFacilityTab].title}</h3>
+              <p className="text-xs md:text-sm text-white/70 leading-relaxed">{facilityImages[activeFacilityTab].desc}</p>
             </div>
 
             {/* Left arrow */}
