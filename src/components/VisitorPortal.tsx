@@ -346,7 +346,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
 
       {/* ── HERO ── */}
       <section
-        className="relative overflow-hidden py-16 md:py-24 px-5 md:px-14 lg:px-24"
+        className="relative overflow-hidden py-4 md:py-24 px-5 md:px-14 lg:px-24"
         id="hero-banner"
         style={{ background: `linear-gradient(140deg, #002147 0%, ${NAVY} 45%, #162d50 100%)` }}
       >
@@ -586,7 +586,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
       </section>}
 
       {/* ── FACILITIES CAROUSEL ── */}
-      <section className="py-6 md:py-20 px-3 md:px-14 lg:px-24" style={{ background: "#0e1a2e" }}>
+      <section className="py-6 md:py-20 px-3 md:px-14 lg:px-24" style={{ background: "linear-gradient(160deg, #0e1a2e 0%, #1a2a18 50%, #0e1a2e 100%)" }}>
         <div className="max-w-5xl mx-auto">
           <p className="text-center text-[11px] font-black text-[#C9A84C]/70 uppercase tracking-[0.35em] mb-6 md:mb-10">
             — Our Facilities —
