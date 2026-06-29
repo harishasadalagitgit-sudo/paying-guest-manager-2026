@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   MapPin,
   Wifi,
@@ -157,6 +157,29 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
   const [bkSuccess, setBkSuccess] = useState(false);
   const [showHotelSection, setShowHotelSection] = useState(false);
   const [showContactSection, setShowContactSection] = useState(false);
+  const [activeFacilityTab, setActiveFacilityTab] = useState(0);
+
+  const facilityImages = [
+    { url: "/MiSpaceRooftopKitchen.png",   title: "Rooftop Restaurant & Kitchen", desc: "Cook and dine on our breezy rooftop with stunning city views." },
+    { url: "/MiSpaceLoungeSofa.png",        title: "TV Lounge",                    desc: "Spacious lounge to unwind, catch up on shows, and socialise." },
+    { url: "/MiSpaceHotDeskNew.png",        title: "Hot Desks & Co-Working",       desc: "Dedicated work-from-home desks with high-speed WiFi." },
+    { url: "/pgsnookertable.png",           title: "Snooker Zone",                 desc: "Full-size snooker table for leisurely evenings." },
+    { url: "/MiSpaceIndoorFootball.png",    title: "Indoor Football",              desc: "Indoor pitch for quick matches with fellow residents." },
+    { url: "/pgwashingmachine.png",         title: "Washing Machines",             desc: "In-house laundry facility — no outside trips needed." },
+    { url: "/MiSpaceCCTV.png",              title: "24 Hrs CCTV Surveillance",     desc: "Round-the-clock monitoring for your complete peace of mind." },
+    { url: "/MiSpaceAcBed.png",             title: "AC Beds",                      desc: "Every bed paired with individual air-conditioning control." },
+
+    { url: "/MiSpaceTableTennis.png",       title: "Table Tennis",                 desc: "Table tennis table for a quick game and some friendly competition." },
+    { url: "/MiSpaceGym.png",               title: "Gym",                          desc: "Fully equipped gym to keep you fit without stepping outside." },
+  ];
+
+  // Auto-advance facilities carousel
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActiveFacilityTab(prev => (prev + 1) % facilityImages.length);
+    }, 3500);
+    return () => clearInterval(timer);
+  }, [facilityImages.length]);
 
   const openHotelSection = () => {
     setShowHotelSection(true);
@@ -562,6 +585,71 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
         </div>
       </section>}
 
+      {/* ── FACILITIES CAROUSEL ── */}
+      <section className="py-20 px-5 md:px-14 lg:px-24" style={{ background: "#0e1a2e" }}>
+        <div className="max-w-5xl mx-auto">
+          <p className="text-center text-[11px] font-black text-[#C9A84C]/70 uppercase tracking-[0.35em] mb-10">
+            — Our Facilities —
+          </p>
+
+          {/* Main featured image */}
+          <div className="relative aspect-[16/9] overflow-hidden rounded-3xl shadow-2xl shadow-amber-900/40 border border-white/10 bg-slate-900">
+            <img
+              key={activeFacilityTab}
+              src={facilityImages[activeFacilityTab].url}
+              alt={facilityImages[activeFacilityTab].title}
+              className="w-full h-full object-cover transition-all duration-700 ease-in-out"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent flex flex-col justify-end p-8">
+              <h3 className="text-2xl font-black text-white mb-1.5">{facilityImages[activeFacilityTab].title}</h3>
+              <p className="text-sm text-white/70 leading-relaxed">{facilityImages[activeFacilityTab].desc}</p>
+            </div>
+
+            {/* Left arrow */}
+            <button
+              onClick={() => setActiveFacilityTab(prev => (prev - 1 + facilityImages.length) % facilityImages.length)}
+              className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center bg-black/50 hover:bg-black/80 border border-white/20 transition-all duration-200 cursor-pointer"
+              aria-label="Previous"
+            >
+              <ChevronLeft className="w-5 h-5 text-white" />
+            </button>
+
+            {/* Right arrow */}
+            <button
+              onClick={() => setActiveFacilityTab(prev => (prev + 1) % facilityImages.length)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center bg-black/50 hover:bg-black/80 border border-white/20 transition-all duration-200 cursor-pointer"
+              aria-label="Next"
+            >
+              <ChevronRight className="w-5 h-5 text-white" />
+            </button>
+
+            {/* Dot indicators */}
+            <div className="absolute top-5 right-16 flex gap-1.5">
+              {facilityImages.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setActiveFacilityTab(idx)}
+                  className={`rounded-full transition-all duration-200 cursor-pointer ${activeFacilityTab === idx ? "w-5 h-2.5 bg-amber-400" : "w-2.5 h-2.5 bg-white/40 hover:bg-white/80"}`}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Thumbnail strip */}
+          <div className="mt-5 grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-2">
+            {facilityImages.map((img, idx) => (
+              <button
+                key={idx}
+                onClick={() => setActiveFacilityTab(idx)}
+                className={`aspect-video overflow-hidden rounded-xl border-2 transition-all duration-200 cursor-pointer ${activeFacilityTab === idx ? "border-amber-500 shadow-lg shadow-[#C9A84C]/30" : "border-white/10 opacity-40 hover:opacity-75"}`}
+              >
+                <img src={img.url} alt={img.title} className="w-full h-full object-cover" />
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── ENQUIRY FORM ── */}
       <section
         className="py-20 px-5 md:px-14 lg:px-24"
@@ -705,6 +793,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
               { icon: Tv, title: "TV LOUNGE", sub: "Unwind, Relax & Recharge" },
               { icon: Gamepad2, title: "Indoor Games", sub: "Snooker, Table Tennis & More" },
               { icon: Utensils, title: "Self Cooking", sub: "Cook Your Own Meals Anytime" },
+              { icon: Video, title: "24 Hrs CCTV", sub: "Round-the-Clock Surveillance" },
             ].map(({ icon: Icon, title, sub }) => (
               <div
                 key={title}
