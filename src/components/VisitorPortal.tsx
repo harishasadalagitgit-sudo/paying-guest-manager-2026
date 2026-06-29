@@ -346,7 +346,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
 
       {/* ── HERO ── */}
       <section
-        className="relative overflow-hidden py-4 md:py-24 px-5 md:px-14 lg:px-24"
+        className="relative overflow-hidden py-4 md:py-8 px-5 md:px-14 lg:px-24"
         id="hero-banner"
         style={{ background: `linear-gradient(140deg, #002147 0%, ${NAVY} 45%, #162d50 100%)` }}
       >
@@ -669,9 +669,9 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
             </p>
             <div className="space-y-3.5 pt-2">
               {[
-                "Instant Admin Alert Dispatched",
+
                 "Transparent Pricing Guarantee",
-                "Secure Direct Firestore Record Logs",
+
                 "Email Alert Routed to mispacepayingguest@gmail.com",
               ].map((item) => (
                 <div key={item} className="flex items-center gap-3">
