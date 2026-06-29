@@ -600,7 +600,7 @@ export default function VisitorPortal({ onSwitchToAdmin, onSwitchToResident }: V
               alt={facilityImages[activeFacilityTab].title}
               className="w-full h-full object-cover transition-all duration-700 ease-in-out"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent flex flex-col justify-end p-8">
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent flex flex-col justify-end p-5 md:p-8">
               <h3 className="text-lg md:text-2xl font-black text-white mb-1.5">{facilityImages[activeFacilityTab].title}</h3>
               <p className="text-xs md:text-sm text-white/70 leading-relaxed">{facilityImages[activeFacilityTab].desc}</p>
             </div>
