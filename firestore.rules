@@ -49,5 +49,11 @@ service cloud.firestore {
     match /deskExpenseEntries/{entryId} {
       allow read, write: if true;
     }
+
+    // Historical record of residents who have moved out, written by the
+    // MiSpace PG desktop app's Update Residents screen.
+    match /vacatedResidents/{entryId} {
+      allow read, write: if true;
+    }
   }
 }
