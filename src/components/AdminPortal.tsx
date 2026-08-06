@@ -1388,9 +1388,10 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
     const isQueryMatch = roomQuery === "" || room.roomNum.toLowerCase().includes(roomQuery.toLowerCase());
 
     let isStatusMatch = true;
+    const roomCapacity = room.capacity || 6;
     if (roomStatusFilter === "Vacant") isStatusMatch = room.occupiedCount === 0;
-    else if (roomStatusFilter === "Available Slots") isStatusMatch = room.occupiedCount > 0 && room.occupiedCount < 6;
-    else if (roomStatusFilter === "Fully Booked") isStatusMatch = room.occupiedCount >= 6;
+    else if (roomStatusFilter === "Available Slots") isStatusMatch = room.occupiedCount > 0 && room.occupiedCount < roomCapacity;
+    else if (roomStatusFilter === "Fully Booked") isStatusMatch = room.occupiedCount >= roomCapacity;
 
     return isFloorMatch && isQueryMatch && isStatusMatch;
   });
@@ -1411,7 +1412,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
   const overdueResidents = residents.filter(r => r.balanceAmount > 0);
 
   // Total metrics
-  const totalSlots = rooms.length * 6; // 53 * 6 = 318
+  const totalSlots = rooms.reduce((sum, r) => sum + (r.capacity || 6), 0);
   const activeResidentsCount = residents.length;
   const averageOccupancy = totalSlots > 0 ? Math.round((activeResidentsCount / totalSlots) * 100) : 0;
   const totalDuesAmount = residents.reduce((sum, r) => sum + r.balanceAmount, 0);
@@ -1769,7 +1770,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                   {rooms.slice(0, 10).map((room) => {
                     let bg = "bg-slate-50 border-slate-200 text-slate-800";
                     if (room.occupiedCount === 0) bg = "bg-indigo-50/40 border-indigo-200 text-indigo-700 hover:border-indigo-400 hover:bg-indigo-50";
-                    else if (room.occupiedCount >= 6) bg = "bg-rose-50 border-rose-150 text-rose-700";
+                    else if (room.occupiedCount >= (room.capacity || 6)) bg = "bg-rose-50 border-rose-150 text-rose-700";
                     else bg = "bg-amber-50/50 border-amber-250 text-amber-800";
 
                     return (
