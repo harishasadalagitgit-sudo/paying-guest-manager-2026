@@ -251,6 +251,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
   const [ipAmount, setIpAmount] = useState<number>(0);
   const [ipBalance, setIpBalance] = useState<number>(0);
   const [ipNotes, setIpNotes] = useState("");
+  const [ipIsAdvance, setIpIsAdvance] = useState(false);
 
   // Report State
   const BUILDING_RENT = 450000;
@@ -1300,7 +1301,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
     setIpTitle(""); setIpType("Hostel Resident Monthly"); setIpDate("");
     setIpPayee(""); setIpCash(true); setIpTxn(""); setIpPhonePay("");
     setIpResidentName(""); setIpRoomNum(""); setIpBedNum("");
-    setIpAmount(0); setIpBalance(0); setIpNotes("");
+    setIpAmount(0); setIpBalance(0); setIpNotes(""); setIpIsAdvance(false);
     setIsEditingIncomingPaymentId(null);
   };
 
@@ -1311,9 +1312,10 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
       return;
     }
     try {
+      const effectiveType: IncomingPaymentType = ipIsAdvance ? "Others" : ipType;
       const data: Omit<IncomingPayment, "id"> = {
         title: ipTitle,
-        paymentType: ipType,
+        paymentType: effectiveType,
         paymentDate: ipDate,
         payee: ipPayee,
         paidInCash: ipCash,
@@ -1324,7 +1326,9 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
         bedNum: ipBedNum !== "" ? Number(ipBedNum) : undefined,
         amount: Number(ipAmount),
         balancePending: Number(ipBalance),
-        notes: ipNotes,
+        notes: ipIsAdvance
+          ? ["Advance / security deposit (returnable, not rent)", ipNotes].filter(Boolean).join(" — ")
+          : ipNotes,
       };
       if (isEditingIncomingPaymentId) {
         await updateDoc(doc(db, "incomingPayments", isEditingIncomingPaymentId), data as any);
@@ -1332,15 +1336,31 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
         await addDoc(collection(db, "incomingPayments"), data);
       }
 
-      // Keep the matching resident's balance in sync: total rent owed
-      // (months since joining x monthly rent) minus everything paid so far.
-      if (ipType === "Hostel Resident Monthly" && ipRoomNum) {
+      if (ipIsAdvance && ipRoomNum) {
+        // Advance / security deposit is a returnable liability, not rent —
+        // it goes to the resident's securityDeposit, never the rent balance.
+        const matchedResident = residents.find(
+          r => r.roomNum === ipRoomNum && (ipBedNum === "" || r.bedNum === Number(ipBedNum))
+        );
+        if (matchedResident) {
+          await updateDoc(doc(db, "residents", matchedResident.id), {
+            securityDeposit: (matchedResident.securityDeposit || 0) + Number(ipAmount),
+          });
+        }
+      } else if (ipType === "Hostel Resident Monthly" && ipRoomNum) {
+        // Keep the matching resident's balance in sync: total rent owed
+        // (months since joining x monthly rent) minus everything paid so far.
         const matchedResident = residents.find(
           r => r.roomNum === ipRoomNum && (ipBedNum === "" || r.bedNum === Number(ipBedNum))
         );
         if (matchedResident) {
           const priorPaid = incomingPayments
-            .filter(p => p.roomNum === matchedResident.roomNum && p.bedNum === matchedResident.bedNum && p.id !== isEditingIncomingPaymentId)
+            .filter(p =>
+              p.roomNum === matchedResident.roomNum &&
+              p.bedNum === matchedResident.bedNum &&
+              p.paymentType === "Hostel Resident Monthly" &&
+              p.id !== isEditingIncomingPaymentId
+            )
             .reduce((sum, p) => sum + (p.amount || 0), 0);
           const totalPaid = priorPaid + Number(ipAmount);
           const monthsElapsed = monthsElapsedSinceJoining(matchedResident.joiningDate);
@@ -3513,15 +3533,29 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                           className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none focus:border-green-500" />
                       </div>
 
-                      <div>
-                        <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Payment Type *</label>
-                        <select required value={ipType} onChange={e => setIpType(e.target.value as IncomingPaymentType)}
-                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none">
-                          {(["Hostel Resident Monthly","Hotel Payment","Temporary Accommodation Payment","Others"] as IncomingPaymentType[]).map(t => (
-                            <option key={t} value={t}>{t}</option>
-                          ))}
-                        </select>
+                      <div className="sm:col-span-2 lg:col-span-3">
+                        <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={ipIsAdvance}
+                            onChange={e => setIpIsAdvance(e.target.checked)}
+                            className="w-4 h-4"
+                          />
+                          This is an advance / security deposit (returnable, not monthly rent)
+                        </label>
                       </div>
+
+                      {!ipIsAdvance && (
+                        <div>
+                          <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Payment Type *</label>
+                          <select required value={ipType} onChange={e => setIpType(e.target.value as IncomingPaymentType)}
+                            className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none">
+                            {(["Hostel Resident Monthly","Hotel Payment","Temporary Accommodation Payment","Others"] as IncomingPaymentType[]).map(t => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
 
                       <div>
                         <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Date of Payment *</label>
