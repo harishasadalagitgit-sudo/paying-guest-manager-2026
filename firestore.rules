@@ -38,5 +38,16 @@ service cloud.firestore {
     match /hotelBookingRequests/{reqId} {
       allow read, write: if true;
     }
+
+    // Staging collections used by the MiSpace PG desktop app. Entries here
+    // are supervisor-submitted and reviewer-approved before being copied
+    // into the live `incomingPayments` / `expenses` collections above.
+    match /deskIncomeEntries/{entryId} {
+      allow read, write: if true;
+    }
+
+    match /deskExpenseEntries/{entryId} {
+      allow read, write: if true;
+    }
   }
 }
