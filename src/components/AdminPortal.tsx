@@ -990,6 +990,19 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
     }
   };
 
+  const handleDeleteResident = async (resId: string, resName: string) => {
+    if (!window.confirm(`Permanently delete ${resName}? Unlike checkout, this keeps no record — use it only to correct a mistake or duplicate.`)) {
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, "residents", resId));
+      if (selectedResidentId === resId) setSelectedResidentId(null);
+      await runOccupancyRebuilder();
+    } catch (e: any) {
+      alert("Error deleting resident: " + e.message);
+    }
+  };
+
   const openMoveModal = (resId: string) => {
     setMoveResidentId(resId);
     setMoveNewRoomNum("");
@@ -2708,10 +2721,18 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                               <button
                                 onClick={() => openExitModal(res.id)}
                                 className="p-2 bg-white hover:bg-red-50 text-red-600 border border-slate-250 rounded-lg transition"
-                                title="Checkout / Delete"
+                                title="Checkout (archives to Vacated Residents)"
                                 type="button"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteResident(res.id, res.name)}
+                                className="p-2 bg-white hover:bg-red-50 text-red-800 border border-slate-250 rounded-lg transition"
+                                title="Permanently delete (no record kept — use only to fix a mistake)"
+                                type="button"
+                              >
+                                <X className="w-3.5 h-3.5" />
                               </button>
                             </div>
 
