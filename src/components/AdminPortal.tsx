@@ -285,6 +285,13 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
   const [moveNewBedNum, setMoveNewBedNum] = useState<number | "">("");
   const [moveIsProcessing, setMoveIsProcessing] = useState(false);
 
+  // Restore Vacated Resident Modal
+  const [restoreVacatedId, setRestoreVacatedId] = useState<string | null>(null);
+  const [restoreNewRoomNum, setRestoreNewRoomNum] = useState("");
+  const [restoreNewBedNum, setRestoreNewBedNum] = useState<number | "">("");
+  const [restoreNewJoiningDate, setRestoreNewJoiningDate] = useState("");
+  const [restoreIsProcessing, setRestoreIsProcessing] = useState(false);
+
   // Exit Resident Modal
   const [exitResidentId, setExitResidentId] = useState<string | null>(null);
   const [exitIdType, setExitIdType] = useState("Aadhaar Card");
@@ -1030,6 +1037,63 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
       alert("Error moving resident: " + e.message);
     } finally {
       setMoveIsProcessing(false);
+    }
+  };
+
+  const openRestoreModal = (vacatedId: string) => {
+    const vacatedRes = vacatedResidents.find(r => r.id === vacatedId);
+    setRestoreVacatedId(vacatedId);
+    setRestoreNewRoomNum(vacatedRes?.roomNum || "");
+    setRestoreNewBedNum(vacatedRes?.bedNum ?? "");
+    setRestoreNewJoiningDate(new Date().toISOString().split("T")[0]);
+  };
+
+  const cancelRestoreModal = () => {
+    setRestoreVacatedId(null);
+    setRestoreNewRoomNum("");
+    setRestoreNewBedNum("");
+    setRestoreNewJoiningDate("");
+  };
+
+  const confirmRestoreResident = async () => {
+    if (!restoreVacatedId || !restoreNewRoomNum) return;
+    const vacatedRes = vacatedResidents.find(r => r.id === restoreVacatedId);
+    if (!vacatedRes) return;
+
+    const targetRoom = rooms.find(r => r.roomNum === restoreNewRoomNum);
+    if (!targetRoom) {
+      alert("This room does not exist.");
+      return;
+    }
+    if (targetRoom.occupiedCount >= (targetRoom.capacity || 6)) {
+      alert(`Room ${targetRoom.roomNum} is already at capacity (${targetRoom.occupiedCount}/${targetRoom.capacity || 6}).`);
+      return;
+    }
+    if (restoreNewBedNum !== "") {
+      const bedTaken = residents.find(r => r.roomNum === restoreNewRoomNum && r.bedNum === Number(restoreNewBedNum));
+      if (bedTaken) {
+        alert(`Bed ${restoreNewBedNum} in Room ${restoreNewRoomNum} is already taken by ${bedTaken.name}.`);
+        return;
+      }
+    }
+
+    setRestoreIsProcessing(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id, vacatedAt, vacatedBy, reason, originalResidentId, ...rest } = vacatedRes;
+      await addDoc(collection(db, "residents"), {
+        ...rest,
+        roomNum: restoreNewRoomNum,
+        bedNum: restoreNewBedNum !== "" ? Number(restoreNewBedNum) : null,
+        joiningDate: restoreNewJoiningDate || new Date().toISOString().split("T")[0]
+      });
+      await deleteDoc(doc(db, "vacatedResidents", restoreVacatedId));
+      await runOccupancyRebuilder();
+      cancelRestoreModal();
+    } catch (e: any) {
+      alert("Error restoring resident: " + e.message);
+    } finally {
+      setRestoreIsProcessing(false);
     }
   };
 
@@ -2193,6 +2257,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                             <th className="py-2 pr-4">Vacated On</th>
                             <th className="py-2 pr-4">Vacated By</th>
                             <th className="py-2 pr-4">Reason</th>
+                            <th className="py-2 pr-4"></th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2205,6 +2270,14 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                               <td className="py-2 pr-4">{new Date(r.vacatedAt).toLocaleDateString()}</td>
                               <td className="py-2 pr-4">{r.vacatedBy}</td>
                               <td className="py-2 pr-4">{r.reason || "—"}</td>
+                              <td className="py-2 pr-4">
+                                <button
+                                  onClick={() => openRestoreModal(r.id)}
+                                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+                                >
+                                  Restore to Room
+                                </button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -4444,6 +4517,98 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
         </div>
 
       </div>
+
+      {/* ── Restore Vacated Resident Modal ── */}
+      {restoreVacatedId && (() => {
+        const vacatedRes = vacatedResidents.find(r => r.id === restoreVacatedId);
+        if (!vacatedRes) return null;
+        const targetRoom = rooms.find(r => r.roomNum === restoreNewRoomNum);
+        const occupiedBedsInTarget = new Set(
+          residents.filter(r => r.roomNum === restoreNewRoomNum).map(r => r.bedNum)
+        );
+        const vacantBedsInTarget = targetRoom
+          ? Array.from({ length: targetRoom.capacity || 6 }, (_, i) => i + 1).filter(b => !occupiedBedsInTarget.has(b))
+          : [];
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5 border border-slate-200">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Restore Resident</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Restoring <strong>{vacatedRes.name}</strong> to an active room
+                  </p>
+                </div>
+                <button onClick={cancelRestoreModal} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block mb-1">Room</label>
+                  <select
+                    value={restoreNewRoomNum}
+                    onChange={e => { setRestoreNewRoomNum(e.target.value); setRestoreNewBedNum(""); }}
+                    className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-2 font-semibold text-slate-800 focus:outline-none focus:border-indigo-400"
+                  >
+                    <option value="">Select room</option>
+                    {rooms.map(r => (
+                      <option key={r.id} value={r.roomNum}>{r.roomNum} ({r.occupiedCount}/{r.capacity || 6} occupied)</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block mb-1">Bed</label>
+                  <select
+                    value={restoreNewBedNum}
+                    onChange={e => setRestoreNewBedNum(e.target.value ? Number(e.target.value) : "")}
+                    disabled={!targetRoom}
+                    className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-2 font-semibold text-slate-800 focus:outline-none focus:border-indigo-400 disabled:opacity-50"
+                  >
+                    <option value="">Unassigned</option>
+                    {vacantBedsInTarget.map(b => (
+                      <option key={b} value={b}>Bed {b}</option>
+                    ))}
+                  </select>
+                  {targetRoom && vacantBedsInTarget.length === 0 && (
+                    <p className="text-[10px] text-red-600 font-bold mt-1">No vacant beds in this room.</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block mb-1">New Joining Date</label>
+                <input
+                  type="date"
+                  value={restoreNewJoiningDate}
+                  onChange={e => setRestoreNewJoiningDate(e.target.value)}
+                  className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-2 font-semibold text-slate-800 focus:outline-none focus:border-indigo-400"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">Rent billing restarts from this date.</p>
+              </div>
+
+              <div className="flex gap-3 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={cancelRestoreModal}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs px-4 py-2.5 rounded-xl transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!restoreNewRoomNum || restoreIsProcessing}
+                  onClick={confirmRestoreResident}
+                  className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition cursor-pointer shadow-sm shadow-indigo-100"
+                >
+                  {restoreIsProcessing ? "Restoring…" : "Restore Resident"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Move Resident Modal ── */}
       {moveResidentId && (() => {
