@@ -55,5 +55,11 @@ service cloud.firestore {
     match /vacatedResidents/{entryId} {
       allow read, write: if true;
     }
+
+    // Reservations — someone who paid an advance and is holding a room/bed
+    // but hasn't moved in yet. Converting one creates a `residents` doc.
+    match /bookings/{bookingId} {
+      allow read, write: if true;
+    }
   }
 }
