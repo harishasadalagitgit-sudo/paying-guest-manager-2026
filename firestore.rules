@@ -61,5 +61,11 @@ service cloud.firestore {
     match /bookings/{bookingId} {
       allow read, write: if true;
     }
+
+    // Monthly recurring-expense reminder checklist (Admin/Supervisor), one
+    // doc per month, doc id = "YYYY-MM".
+    match /monthlyChecklists/{month} {
+      allow read, write: if true;
+    }
   }
 }
