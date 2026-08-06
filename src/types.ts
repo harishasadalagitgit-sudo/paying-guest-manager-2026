@@ -41,12 +41,40 @@ export interface Resident {
   whatsappNumber: string;
   joiningDate: string; // YYYY-MM-DD
   balanceAmount: number; // outstanding fee
+  rentAmount: number; // agreed monthly rent
+  securityDeposit: number; // deposit collected at joining
   roomNum: string; // e.g. "101"
   bedNum?: number; // 1-based bed number within the room
   specialNotes?: string;
   paymentHistoryJson?: string; // stringified JSON representing PaymentRecord[]
   idsJson?: string; // stringified JSON representing ResidentID[]
   photo?: string; // base64 profile photo
+}
+
+// Snapshot of a resident's record, kept for history when they move out.
+// Written by the checkout flow (website or desktop app) right before the
+// live `residents` doc is deleted.
+export interface VacatedResident {
+  id: string;
+  originalResidentId: string;
+  name: string;
+  roomNum: string;
+  bedNum?: number;
+  mobileNumber?: string;
+  whatsappNumber?: string;
+  joiningDate?: string;
+  dob?: string;
+  balanceAmount?: number;
+  rentAmount?: number;
+  securityDeposit?: number;
+  permanentAddress?: string;
+  currentWorkingCompanyOrCollege?: string;
+  parentsInformation?: string;
+  emergencyContact?: string;
+  specialNotes?: string;
+  vacatedAt: string;
+  vacatedBy: string;
+  reason: string;
 }
 
 export interface Employee {

@@ -55,8 +55,19 @@ import {
   writeBatch
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { Room, Resident, Reminder, Enquiry, PaymentRecord, ResidentID, Employee, Expense, ExpenseType, IncomingPayment, IncomingPaymentType, HotelBookingRequest } from "../types";
+import { Room, Resident, Reminder, Enquiry, PaymentRecord, ResidentID, Employee, Expense, ExpenseType, IncomingPayment, IncomingPaymentType, HotelBookingRequest, VacatedResident } from "../types";
 import { initialRoomsList, getFloorForRoom, ALL_ROOM_NUMBERS } from "../initialRooms";
+
+// Billing cycle = the resident's join-day anniversary each month (joined on
+// the 12th -> billed on the 12th every month, first month owed immediately).
+// Security deposit is a one-time joining payment, never part of this calc.
+function monthsElapsedSinceJoining(joiningDate: string, today: Date = new Date()): number {
+  const join = new Date(joiningDate);
+  if (isNaN(join.getTime())) return 0;
+  let months = (today.getFullYear() - join.getFullYear()) * 12 + (today.getMonth() - join.getMonth());
+  if (today.getDate() >= join.getDate()) months += 1;
+  return Math.max(1, months);
+}
 
 const LuxuryHotelSVG = () => (
   <svg viewBox="0 0 80 80" width="60" height="60" xmlns="http://www.w3.org/2000/svg">
@@ -142,6 +153,8 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
   // Database States
   const [rooms, setRooms] = useState<Room[]>([]);
   const [residents, setResidents] = useState<Resident[]>([]);
+  const [vacatedResidents, setVacatedResidents] = useState<VacatedResident[]>([]);
+  const [showVacatedResidents, setShowVacatedResidents] = useState(false);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
   const [serverEmails, setServerEmails] = useState<any[]>([]);
@@ -176,6 +189,8 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
   const [resMobile, setResMobile] = useState("");
   const [resWhatsapp, setResWhatsapp] = useState("");
   const [resBalance, setResBalance] = useState<number>(0);
+  const [resRent, setResRent] = useState<number>(0);
+  const [resSecurityDeposit, setResSecurityDeposit] = useState<number>(0);
   const [resRoomNum, setResRoomNum] = useState("");
   const [resBedNum, setResBedNum] = useState<number>(0);
   const [resNotes, setResNotes] = useState("");
@@ -264,11 +279,18 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
   const [formIdName, setFormIdName] = useState("");
   const [formIdBase64, setFormIdBase64] = useState("");
 
+  // Move Resident (change room/bed) Modal
+  const [moveResidentId, setMoveResidentId] = useState<string | null>(null);
+  const [moveNewRoomNum, setMoveNewRoomNum] = useState("");
+  const [moveNewBedNum, setMoveNewBedNum] = useState<number | "">("");
+  const [moveIsProcessing, setMoveIsProcessing] = useState(false);
+
   // Exit Resident Modal
   const [exitResidentId, setExitResidentId] = useState<string | null>(null);
   const [exitIdType, setExitIdType] = useState("Aadhaar Card");
   const [exitIdName, setExitIdName] = useState("");
   const [exitIdBase64, setExitIdBase64] = useState("");
+  const [exitReason, setExitReason] = useState("");
   const [exitIsProcessing, setExitIsProcessing] = useState(false);
 
   // Seed loading state
@@ -378,7 +400,19 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
       (err) => console.error("HotelBookingRequests listener error:", err)
     );
 
-    // 9. Fetch Server Emails Visual Log
+    // 9. Vacated Residents Listener
+    const vacatedResidentsUnsub = onSnapshot(
+      collection(db, "vacatedResidents"),
+      (snapshot) => {
+        const list: VacatedResident[] = [];
+        snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as VacatedResident));
+        list.sort((a, b) => b.vacatedAt.localeCompare(a.vacatedAt));
+        setVacatedResidents(list);
+      },
+      (err) => console.error("VacatedResidents listener error:", err)
+    );
+
+    // 10. Fetch Server Emails Visual Log
     fetchServerEmails();
 
     return () => {
@@ -390,6 +424,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
       expensesUnsub();
       incomingPaymentsUnsub();
       bookingRequestsUnsub();
+      vacatedResidentsUnsub();
     };
   }, []);
 
@@ -809,6 +844,8 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
         mobileNumber: resMobile,
         whatsappNumber: resWhatsapp || resMobile.replace(/[^0-9]/g, ""),
         balanceAmount: Number(resBalance) || 0,
+        rentAmount: Number(resRent) || 0,
+        securityDeposit: Number(resSecurityDeposit) || 0,
         roomNum: resRoomNum,
         bedNum: resBedNum || null,
         specialNotes: resNotes || "",
@@ -874,6 +911,8 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
     setResMobile(res.mobileNumber);
     setResWhatsapp(res.whatsappNumber);
     setResBalance(res.balanceAmount);
+    setResRent(res.rentAmount || 0);
+    setResSecurityDeposit(res.securityDeposit || 0);
     setResRoomNum(res.roomNum);
     setResBedNum(res.bedNum || 0);
     setResNotes(res.specialNotes || "");
@@ -886,45 +925,111 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
     setExitIdType("Aadhaar Card");
     setExitIdName("");
     setExitIdBase64("");
+    setExitReason("");
   };
 
   const cancelExitModal = () => {
     setExitResidentId(null);
     setExitIdBase64("");
     setExitIdName("");
+    setExitReason("");
   };
 
   const confirmExitResident = async () => {
     if (!exitResidentId) return;
     setExitIsProcessing(true);
     try {
+      const activeResident = residents.find(r => r.id === exitResidentId);
+
       // If an exit ID was uploaded, save it to the resident record before deleting
-      if (exitIdBase64 && exitIdName) {
-        const activeResident = residents.find(r => r.id === exitResidentId);
-        if (activeResident) {
-          const currentIds: ResidentID[] = activeResident.idsJson ? JSON.parse(activeResident.idsJson) : [];
-          currentIds.push({
-            id: "exit_id_" + Date.now(),
-            type: exitIdType,
-            idName: "[EXIT] " + exitIdName,
-            fileData: exitIdBase64,
-            uploadedAt: new Date().toLocaleDateString()
-          });
-          await updateDoc(doc(db, "residents", exitResidentId), {
-            idsJson: JSON.stringify(currentIds)
-          });
-        }
+      if (exitIdBase64 && exitIdName && activeResident) {
+        const currentIds: ResidentID[] = activeResident.idsJson ? JSON.parse(activeResident.idsJson) : [];
+        currentIds.push({
+          id: "exit_id_" + Date.now(),
+          type: exitIdType,
+          idName: "[EXIT] " + exitIdName,
+          fileData: exitIdBase64,
+          uploadedAt: new Date().toLocaleDateString()
+        });
+        await updateDoc(doc(db, "residents", exitResidentId), {
+          idsJson: JSON.stringify(currentIds)
+        });
       }
+
+      // Archive a snapshot before deleting, so the resident's history isn't lost
+      if (activeResident) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { id, paymentHistoryJson, idsJson, photo, ...rest } = activeResident;
+        await addDoc(collection(db, "vacatedResidents"), {
+          ...rest,
+          originalResidentId: id,
+          vacatedAt: new Date().toISOString(),
+          vacatedBy: "Website Admin",
+          reason: exitReason || ""
+        });
+      }
+
       await deleteDoc(doc(db, "residents", exitResidentId));
       setSelectedResidentId(null);
       setExitResidentId(null);
       setExitIdBase64("");
       setExitIdName("");
+      setExitReason("");
       await runOccupancyRebuilder();
     } catch (e: any) {
       alert("Error during resident exit: " + e.message);
     } finally {
       setExitIsProcessing(false);
+    }
+  };
+
+  const openMoveModal = (resId: string) => {
+    setMoveResidentId(resId);
+    setMoveNewRoomNum("");
+    setMoveNewBedNum("");
+  };
+
+  const cancelMoveModal = () => {
+    setMoveResidentId(null);
+    setMoveNewRoomNum("");
+    setMoveNewBedNum("");
+  };
+
+  const confirmMoveResident = async () => {
+    if (!moveResidentId || !moveNewRoomNum) return;
+    const movingRes = residents.find(r => r.id === moveResidentId);
+    if (!movingRes) return;
+
+    const targetRoom = rooms.find(r => r.roomNum === moveNewRoomNum);
+    if (!targetRoom) {
+      alert("This room does not exist.");
+      return;
+    }
+    const roomIsChanging = moveNewRoomNum !== movingRes.roomNum;
+    if (roomIsChanging && targetRoom.occupiedCount >= (targetRoom.capacity || 6)) {
+      alert(`Room ${targetRoom.roomNum} is already at capacity (${targetRoom.occupiedCount}/${targetRoom.capacity || 6}).`);
+      return;
+    }
+    if (moveNewBedNum !== "") {
+      const bedTaken = residents.find(r => r.roomNum === moveNewRoomNum && r.bedNum === Number(moveNewBedNum) && r.id !== moveResidentId);
+      if (bedTaken) {
+        alert(`Bed ${moveNewBedNum} in Room ${moveNewRoomNum} is already taken by ${bedTaken.name}.`);
+        return;
+      }
+    }
+
+    setMoveIsProcessing(true);
+    try {
+      await updateDoc(doc(db, "residents", moveResidentId), {
+        roomNum: moveNewRoomNum,
+        bedNum: moveNewBedNum !== "" ? Number(moveNewBedNum) : null
+      });
+      await runOccupancyRebuilder();
+      cancelMoveModal();
+    } catch (e: any) {
+      alert("Error moving resident: " + e.message);
+    } finally {
+      setMoveIsProcessing(false);
     }
   };
 
@@ -939,6 +1044,8 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
     setResMobile("");
     setResWhatsapp("");
     setResBalance(0);
+    setResRent(0);
+    setResSecurityDeposit(0);
     setResRoomNum("");
     setResBedNum(0);
     setResNotes("");
@@ -1147,6 +1254,25 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
       } else {
         await addDoc(collection(db, "incomingPayments"), data);
       }
+
+      // Keep the matching resident's balance in sync: total rent owed
+      // (months since joining x monthly rent) minus everything paid so far.
+      if (ipType === "Hostel Resident Monthly" && ipRoomNum) {
+        const matchedResident = residents.find(
+          r => r.roomNum === ipRoomNum && (ipBedNum === "" || r.bedNum === Number(ipBedNum))
+        );
+        if (matchedResident) {
+          const priorPaid = incomingPayments
+            .filter(p => p.roomNum === matchedResident.roomNum && p.bedNum === matchedResident.bedNum && p.id !== isEditingIncomingPaymentId)
+            .reduce((sum, p) => sum + (p.amount || 0), 0);
+          const totalPaid = priorPaid + Number(ipAmount);
+          const monthsElapsed = monthsElapsedSinceJoining(matchedResident.joiningDate);
+          const totalDue = monthsElapsed * (matchedResident.rentAmount || 0);
+          const newBalance = Math.max(0, totalDue - totalPaid);
+          await updateDoc(doc(db, "residents", matchedResident.id), { balanceAmount: newBalance });
+        }
+      }
+
       setIsAddingIncomingPayment(false);
       resetIncomingPaymentForm();
     } catch (err: any) {
@@ -2030,17 +2156,66 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                   <p className="text-xs text-slate-500 mt-0.5">Register, transfer, update balances or view secure dossier records.</p>
                 </div>
                 
-                <button
-                  onClick={() => { resetResidentForm(); setIsAddingResident(!isAddingResident); setIsEditingResidentId(null); }}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-md shadow-indigo-150/40"
-                >
-                  {isAddingResident ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                  <span>{isAddingResident ? "Cancel Register" : "Register New Resident"}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowVacatedResidents(!showVacatedResidents)}
+                    className="bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs py-2.5 px-4 rounded-xl flex items-center gap-1.5 transition cursor-pointer border border-slate-200"
+                  >
+                    <span>{showVacatedResidents ? "Back to Active Residents" : "View Vacated Residents"}</span>
+                  </button>
+                  <button
+                    onClick={() => { resetResidentForm(); setIsAddingResident(!isAddingResident); setIsEditingResidentId(null); setShowVacatedResidents(false); }}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2.5 px-4 rounded-xl flex items-center gap-1.5 transition cursor-pointer shadow-md shadow-indigo-150/40"
+                  >
+                    {isAddingResident ? <X className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                    <span>{isAddingResident ? "Cancel Register" : "Register New Resident"}</span>
+                  </button>
+                </div>
               </div>
 
+              {/* Vacated Residents panel */}
+              {showVacatedResidents && (
+                <div className="bg-white p-5 rounded-2xl border border-slate-150 shadow-sm">
+                  <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3 mb-4">
+                    Vacated Residents ({vacatedResidents.length})
+                  </h4>
+                  {vacatedResidents.length === 0 ? (
+                    <p className="text-xs text-slate-500 text-center py-6">No vacated residents recorded yet.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-left text-slate-400 uppercase text-[10px] font-bold border-b border-slate-100">
+                            <th className="py-2 pr-4">Name</th>
+                            <th className="py-2 pr-4">Last Room/Bed</th>
+                            <th className="py-2 pr-4">Mobile</th>
+                            <th className="py-2 pr-4">Deposit to Return</th>
+                            <th className="py-2 pr-4">Vacated On</th>
+                            <th className="py-2 pr-4">Vacated By</th>
+                            <th className="py-2 pr-4">Reason</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {vacatedResidents.map((r) => (
+                            <tr key={r.id} className="border-b border-slate-50">
+                              <td className="py-2 pr-4 font-bold text-slate-800">{r.name}</td>
+                              <td className="py-2 pr-4">{r.roomNum}{r.bedNum ? `/${r.bedNum}` : ""}</td>
+                              <td className="py-2 pr-4">{r.mobileNumber || "—"}</td>
+                              <td className="py-2 pr-4">{r.securityDeposit ? `₹${r.securityDeposit.toLocaleString()}` : "—"}</td>
+                              <td className="py-2 pr-4">{new Date(r.vacatedAt).toLocaleDateString()}</td>
+                              <td className="py-2 pr-4">{r.vacatedBy}</td>
+                              <td className="py-2 pr-4">{r.reason || "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Add/Edit Resident panel */}
-              {isAddingResident && (
+              {!showVacatedResidents && isAddingResident && (
                 <form onSubmit={handleAddResidentSubmit} className="bg-white p-6 rounded-2xl border border-slate-250 shadow-md space-y-6" id="add-resident-form">
                   <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest border-b border-slate-100 pb-3">
                     {isEditingResidentId ? "Edit Resident Profile Details" : "New PG Resident Registry Form"}
@@ -2248,6 +2423,26 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                     })()}
 
                     <div>
+                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Monthly Rent Amount (INR)</label>
+                      <input
+                        type="number"
+                        value={resRent}
+                        onChange={(e) => setResRent(Number(e.target.value))}
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Security Deposit (INR)</label>
+                      <input
+                        type="number"
+                        value={resSecurityDeposit}
+                        onChange={(e) => setResSecurityDeposit(Number(e.target.value))}
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
                       <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Pending Balance Amount (INR)</label>
                       <input
                         type="number"
@@ -2358,6 +2553,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
               )}
 
               {/* Residents Profiles search & list container */}
+              {!showVacatedResidents && (
               <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
                 <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                   <h3 className="text-base font-extrabold text-slate-900">Current active PG residents list</h3>
@@ -2429,6 +2625,14 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                                 <Edit3 className="w-3.5 h-3.5" />
                               </button>
                               <button
+                                onClick={() => openMoveModal(res.id)}
+                                className="p-2 bg-white hover:bg-indigo-50 text-indigo-600 border border-slate-200 rounded-lg transition"
+                                title="Move Room"
+                                type="button"
+                              >
+                                <ArrowUpDown className="w-3.5 h-3.5" />
+                              </button>
+                              <button
                                 onClick={() => openExitModal(res.id)}
                                 className="p-2 bg-white hover:bg-red-50 text-red-600 border border-slate-250 rounded-lg transition"
                                 title="Checkout / Delete"
@@ -2452,6 +2656,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                   </div>
                 )}
               </div>
+              )}
 
               {/* Dynamic Resident Detailed Dossier Panel (Shown when resident clicked) */}
               {selectedResidentId && (
@@ -2560,7 +2765,9 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                                 </h4>
 
                                 <div className="text-right">
-                                  <p className="text-[10px] font-bold text-slate-400 uppercase">Outstanding Dues</p>
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase">Monthly Rent</p>
+                                  <p className="text-sm font-black text-slate-700 font-mono">₹{(activeResObj.rentAmount || 0).toLocaleString()}</p>
+                                  <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Outstanding Dues</p>
                                   <p className="text-lg font-black text-red-600 font-mono">₹{activeResObj.balanceAmount.toLocaleString()}</p>
                                 </div>
                               </div>
@@ -4238,6 +4445,87 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
 
       </div>
 
+      {/* ── Move Resident Modal ── */}
+      {moveResidentId && (() => {
+        const movingRes = residents.find(r => r.id === moveResidentId);
+        if (!movingRes) return null;
+        const targetRoom = rooms.find(r => r.roomNum === moveNewRoomNum);
+        const occupiedBedsInTarget = new Set(
+          residents.filter(r => r.roomNum === moveNewRoomNum && r.id !== moveResidentId).map(r => r.bedNum)
+        );
+        const vacantBedsInTarget = targetRoom
+          ? Array.from({ length: targetRoom.capacity || 6 }, (_, i) => i + 1).filter(b => !occupiedBedsInTarget.has(b))
+          : [];
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5 border border-slate-200">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Move Resident</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Moving <strong>{movingRes.name}</strong> — currently Room {movingRes.roomNum}{movingRes.bedNum ? `, Bed ${movingRes.bedNum}` : ""}
+                  </p>
+                </div>
+                <button onClick={cancelMoveModal} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 transition">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block mb-1">New Room</label>
+                  <select
+                    value={moveNewRoomNum}
+                    onChange={e => { setMoveNewRoomNum(e.target.value); setMoveNewBedNum(""); }}
+                    className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-2 font-semibold text-slate-800 focus:outline-none focus:border-indigo-400"
+                  >
+                    <option value="">Select room</option>
+                    {rooms.map(r => (
+                      <option key={r.id} value={r.roomNum}>{r.roomNum} ({r.occupiedCount}/{r.capacity || 6} occupied)</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block mb-1">New Bed</label>
+                  <select
+                    value={moveNewBedNum}
+                    onChange={e => setMoveNewBedNum(e.target.value ? Number(e.target.value) : "")}
+                    disabled={!targetRoom}
+                    className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-2 font-semibold text-slate-800 focus:outline-none focus:border-indigo-400 disabled:opacity-50"
+                  >
+                    <option value="">Unassigned</option>
+                    {vacantBedsInTarget.map(b => (
+                      <option key={b} value={b}>Bed {b}</option>
+                    ))}
+                  </select>
+                  {targetRoom && vacantBedsInTarget.length === 0 && (
+                    <p className="text-[10px] text-red-600 font-bold mt-1">No vacant beds in this room.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-3 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={cancelMoveModal}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs px-4 py-2.5 rounded-xl transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!moveNewRoomNum || moveIsProcessing}
+                  onClick={confirmMoveResident}
+                  className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition cursor-pointer shadow-sm shadow-indigo-100"
+                >
+                  {moveIsProcessing ? "Moving…" : "Move Resident"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Exit Resident Modal ── */}
       {exitResidentId && (() => {
         const exitRes = residents.find(r => r.id === exitResidentId);
@@ -4313,10 +4601,22 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                 )}
               </div>
 
+              {/* Exit reason */}
+              <div>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide block mb-1">Reason for leaving <span className="text-slate-400 font-semibold normal-case">(optional)</span></label>
+                <input
+                  type="text"
+                  placeholder="e.g. Job relocation"
+                  value={exitReason}
+                  onChange={e => setExitReason(e.target.value)}
+                  className="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-2 font-semibold text-slate-800 focus:outline-none focus:border-indigo-400"
+                />
+              </div>
+
               {/* Warning */}
               <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-xs text-red-700 font-semibold flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-red-500" />
-                <span>This will permanently remove the resident and update room occupancy. Ensure outstanding dues are cleared.</span>
+                <span>The resident will be moved to the Vacated Residents list and removed from active rooms. Ensure outstanding dues are cleared.</span>
               </div>
 
               {/* Actions */}
