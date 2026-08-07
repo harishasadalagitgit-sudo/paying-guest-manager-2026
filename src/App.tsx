@@ -1,27 +1,55 @@
 import React, { useState } from "react";
+import { doc, getDoc } from "firebase/firestore";
 import VisitorPortal from "./components/VisitorPortal";
 import AdminPortal from "./components/AdminPortal";
 import ResidentPortal from "./components/ResidentPortal";
+import { db } from "./lib/firebase";
 import { Lock, Eye, EyeOff } from "lucide-react";
+
+// Same hashing as the MiSpace PG desktop app — the admin password is shared
+// between the two via appSettings/sharedAdmin, so changing it in either
+// place changes it for both.
+async function sha256(text: string): Promise<string> {
+  const data = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 export default function App() {
   const [role, setRole] = useState<"visitor" | "admin" | "resident">("visitor");
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
-  
+
   // Login form values
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [checkingLogin, setCheckingLogin] = useState(false);
 
-  const handleAdminLoginSubmit = (e: React.FormEvent) => {
+  const handleAdminLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage("");
 
-    if (username.trim() === "admin" && password === "ganesh") {
-      setIsAdminAuthenticated(true);
-    } else {
+    if (username.trim() !== "admin") {
       setErrorMessage("Incorrect username or password. Please try again.");
+      return;
+    }
+
+    setCheckingLogin(true);
+    try {
+      const snap = await getDoc(doc(db, "appSettings", "sharedAdmin"));
+      const storedHash = snap.exists() ? (snap.data().adminPasswordHash as string | undefined) : undefined;
+      if (storedHash && (await sha256(password)) === storedHash) {
+        setIsAdminAuthenticated(true);
+      } else {
+        setErrorMessage("Incorrect username or password. Please try again.");
+      }
+    } catch (err: any) {
+      setErrorMessage("Could not verify password: " + err.message);
+    } finally {
+      setCheckingLogin(false);
     }
   };
 
@@ -108,10 +136,11 @@ export default function App() {
 
                 <button
                   type="submit"
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 px-6 rounded-xl transition shadow-lg shadow-indigo-900/30 cursor-pointer flex items-center justify-center gap-2"
+                  disabled={checkingLogin}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 px-6 rounded-xl transition shadow-lg shadow-indigo-900/30 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60"
                 >
                   <Lock className="w-4 h-4" />
-                  <span>Authenticate Dashboard</span>
+                  <span>{checkingLogin ? "Checking…" : "Authenticate Dashboard"}</span>
                 </button>
               </form>
 
