@@ -69,6 +69,26 @@ function monthsElapsedSinceJoining(joiningDate: string, today: Date = new Date()
   return Math.max(1, months);
 }
 
+function clampToMonth(year: number, month: number, day: number): Date {
+  const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+  return new Date(year, month, Math.min(day, lastDayOfMonth));
+}
+
+// The next occurrence of the resident's joining-day-of-month, on or after
+// today — same billing anniversary monthsElapsedSinceJoining uses.
+function nextDueDate(joiningDate: string, today: Date = new Date()): string {
+  const join = new Date(joiningDate);
+  if (isNaN(join.getTime())) return "";
+  const day = join.getDate();
+  let candidate = clampToMonth(today.getFullYear(), today.getMonth(), day);
+  if (candidate < today) {
+    candidate = clampToMonth(today.getFullYear(), today.getMonth() + 1, day);
+  }
+  return `${candidate.getFullYear()}-${String(candidate.getMonth() + 1).padStart(2, "0")}-${String(
+    candidate.getDate()
+  ).padStart(2, "0")}`;
+}
+
 const LuxuryHotelSVG = () => (
   <svg viewBox="0 0 80 80" width="60" height="60" xmlns="http://www.w3.org/2000/svg">
     {/* Stars */}
@@ -1715,7 +1735,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                   </div>
 
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    Under the PG lease policy, monthly outstanding balances should be cleared by the <span className="font-bold text-red-600">2nd of every month</span>. Trigger direct WhatsApp reminders using pre-drafted templates below.
+                    Each resident's rent is due on the anniversary of their <span className="font-bold text-red-600">joining date</span> every month. Trigger direct WhatsApp reminders using pre-drafted templates below.
                   </p>
 
                   <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
@@ -1729,11 +1749,12 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                           <div>
                             <p className="font-bold text-slate-800">{res.name} (Room {res.roomNum})</p>
                             <p className="text-slate-450 text-[10px] font-semibold">Outstanding balance: <span className="text-red-700 font-bold font-mono">₹{res.balanceAmount.toLocaleString()}</span></p>
+                            <p className="text-slate-450 text-[10px] font-semibold">Next due: <span className="text-slate-700 font-bold">{nextDueDate(res.joiningDate)}</span></p>
                           </div>
-                          
-                          <a 
+
+                          <a
                             href={`https://wa.me/${res.whatsappNumber}?text=${encodeURIComponent(
-                              `Hi ${res.name}, this is a friendly reminder from MiSpace PG regarding your outstanding lease balance of ₹${res.balanceAmount} due on the 2nd of this month. Please clear it today via UPI/Cash. Thank you!`
+                              `Hi ${res.name}, this is a friendly reminder from MiSpace PG regarding your outstanding lease balance of ₹${res.balanceAmount}, due on ${nextDueDate(res.joiningDate)}. Please clear it today via UPI/Cash. Thank you!`
                             )}`}
                             target="_blank"
                             rel="noopener noreferrer"
