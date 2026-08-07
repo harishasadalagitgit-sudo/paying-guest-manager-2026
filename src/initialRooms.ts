@@ -11,8 +11,8 @@ export const ALL_ROOM_NUMBERS = [
   "401", "402", "403", "404", "405", "406", "407", "408", "409", "410",
   // Floor 5 (501-510)
   "501", "502", "503", "504", "505", "506", "507", "508", "509", "510",
-  // Floor 6 (601-603)
-  "601", "602", "603"
+  // Floor 6 (601-602) — 603 is used for grocery storage, not a resident room
+  "601", "602"
 ];
 
 export function getFloorForRoom(roomNum: string): number {
