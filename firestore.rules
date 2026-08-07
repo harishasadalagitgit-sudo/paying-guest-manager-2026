@@ -67,5 +67,16 @@ service cloud.firestore {
     match /monthlyChecklists/{month} {
       allow read, write: if true;
     }
+
+    // App-wide configurable settings (e.g. dashboard expense alert
+    // threshold), single doc per setting group.
+    match /appSettings/{settingId} {
+      allow read, write: if true;
+    }
+
+    // Per-month dismissal state for Dashboard alerts, doc id = "YYYY-MM".
+    match /dashboardAlerts/{month} {
+      allow read, write: if true;
+    }
   }
 }
