@@ -166,5 +166,5 @@ export interface Enquiry {
   expectedJoiningDate: string; // YYYY-MM-DD
   sharingInterest: "4room share" | "5room share";
   submittedAt: string; // ISO string
-  status: "Pending" | "Contacted" | "Closed";
+  status: "Pending" | "Contacted" | "Closed" | "Elapsed";
 }

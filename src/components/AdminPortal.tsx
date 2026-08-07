@@ -171,6 +171,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
   const [roomQuery, setRoomQuery] = useState("");
   const [roomStatusFilter, setRoomStatusFilter] = useState("All");
   const [residentSearchQuery, setResidentSearchQuery] = useState("");
+  const [enquiryStatusFilter, setEnquiryStatusFilter] = useState<"Pending" | "Contacted" | "Elapsed" | "All">("Pending");
 
   // Drawer / Modals State
   const [selectedRoomNum, setSelectedRoomNum] = useState<string | null>(null);
@@ -1430,6 +1431,10 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
 
   // Residents with outstanding balances for notification on the 2nd
   const overdueResidents = residents.filter(r => r.balanceAmount > 0);
+
+  const visibleEnquiries = enquiries.filter(
+    (e) => enquiryStatusFilter === "All" || e.status === enquiryStatusFilter
+  );
 
   // Total metrics
   const totalSlots = rooms.reduce((sum, r) => sum + (r.capacity || 6), 0);
@@ -4454,14 +4459,28 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                     <h3 className="text-base font-extrabold text-slate-900 font-sans">Incoming Room Enquiries logged</h3>
                     <p className="text-xs text-slate-550 mt-1">Directly integrated with student visitor landing forms. Every submission logged here.</p>
                   </div>
-                  <span className="bg-amber-50 text-amber-800 border border-amber-250 text-xs font-bold px-3 py-1 rounded-xl">
-                    {enquiries.filter(e => e.status === "Pending").length} Action Pending
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <select
+                      value={enquiryStatusFilter}
+                      onChange={(evt) => setEnquiryStatusFilter(evt.target.value as any)}
+                      className="text-xs font-bold border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none bg-slate-50"
+                    >
+                      <option value="Pending">Pending</option>
+                      <option value="Contacted">Contacted</option>
+                      <option value="Elapsed">Elapsed</option>
+                      <option value="All">All</option>
+                    </select>
+                    <span className="bg-amber-50 text-amber-800 border border-amber-250 text-xs font-bold px-3 py-1 rounded-xl">
+                      {enquiries.filter(e => e.status === "Pending").length} Action Pending
+                    </span>
+                  </div>
                 </div>
 
-                {enquiries.length === 0 ? (
+                {visibleEnquiries.length === 0 ? (
                   <p className="p-8 text-center text-slate-500 bg-slate-50 rounded-xl font-medium">
-                    No enquiries logged yet from the visitor landing page.
+                    {enquiries.length === 0
+                      ? "No enquiries logged yet from the visitor landing page."
+                      : "No enquiries match this filter."}
                   </p>
                 ) : (
                   <div className="overflow-x-auto border border-slate-200 rounded-2xl">
@@ -4476,7 +4495,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                         </tr>
                       </thead>
                       <tbody>
-                        {enquiries.map((e) => (
+                        {visibleEnquiries.map((e) => (
                           <tr key={e.id} className="border-b border-slate-100 font-semibold text-slate-800">
                             <td className="p-3 leading-relaxed">
                               <p className="font-extrabold text-sm">{e.name}</p>
@@ -4493,15 +4512,18 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                                 value={e.status}
                                         onChange={(evt) => updateEnquiryStatus(e.id, evt.target.value as any)}
                                         className={`text-[10.5px] font-black border rounded px-2.5 py-1 focus:outline-none ${
-                                          e.status === "Pending" 
-                                            ? "bg-amber-5 text-amber-800 border-amber-250" 
-                                            : e.status === "Contacted" 
-                                              ? "bg-blue-5 text-blue-800 border-blue-200" 
-                                              : "bg-emerald-5 text-emerald-850 border-emerald-200"
+                                          e.status === "Pending"
+                                            ? "bg-amber-5 text-amber-800 border-amber-250"
+                                            : e.status === "Contacted"
+                                              ? "bg-blue-5 text-blue-800 border-blue-200"
+                                              : e.status === "Elapsed"
+                                                ? "bg-red-5 text-red-800 border-red-200"
+                                                : "bg-emerald-5 text-emerald-850 border-emerald-200"
                                         }`}
                                       >
                                         <option value="Pending">Pending</option>
                                         <option value="Contacted">Contacted</option>
+                                        <option value="Elapsed">Elapsed</option>
                                         <option value="Closed">Closed / Booked</option>
                                       </select>
                                     </td>
