@@ -18,7 +18,7 @@ export default function App() {
     e.preventDefault();
     setErrorMessage("");
 
-    if (username.trim() === "admin" && password === "admin123") {
+    if (username.trim() === "admin" && password === "ganesh") {
       setIsAdminAuthenticated(true);
     } else {
       setErrorMessage("Incorrect username or password. Please try again.");
