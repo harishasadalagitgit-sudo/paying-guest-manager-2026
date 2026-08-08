@@ -276,10 +276,13 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
 
   // Report State
   const BUILDING_RENT = 450000;
-  const [reportMode, setReportMode] = useState<"lastWeek" | "lastMonth" | "custom">("lastMonth");
+  const [reportMode, setReportMode] = useState<"lastWeek" | "lastMonth" | "month" | "custom">("lastMonth");
+  const [reportMonth, setReportMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [reportStartDate, setReportStartDate] = useState("");
   const [reportEndDate, setReportEndDate] = useState("");
   const [reportShowResidents, setReportShowResidents] = useState(false);
+  const [excludedReportExpenseTypes, setExcludedReportExpenseTypes] = useState<Set<string>>(new Set());
+  const [excludedReportIncomeTypes, setExcludedReportIncomeTypes] = useState<Set<string>>(new Set());
 
   // Form State - Reminder
   const [remTitle, setRemTitle] = useState("");
@@ -4039,6 +4042,12 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
               const lmEnd = new Date(today.getFullYear(), today.getMonth(), 0);
               rangeStart = lm.toISOString().slice(0, 10);
               rangeEnd = lmEnd.toISOString().slice(0, 10);
+            } else if (reportMode === "month") {
+              const [y, m] = reportMonth.split("-").map(Number);
+              const mStart = new Date(y, m - 1, 1);
+              const mEnd = new Date(y, m, 0);
+              rangeStart = mStart.toISOString().slice(0, 10);
+              rangeEnd = mEnd.toISOString().slice(0, 10);
             } else {
               rangeStart = reportStartDate;
               rangeEnd = reportEndDate;
@@ -4046,8 +4055,12 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
 
             const inRange = (date: string) => date >= rangeStart && date <= rangeEnd;
 
-            const filteredExpenses = expenses.filter(e => inRange(e.dateOfPayment));
-            const filteredPayments = incomingPayments.filter(p => inRange(p.paymentDate));
+            const filteredExpenses = expenses
+              .filter(e => inRange(e.dateOfPayment))
+              .filter(e => !excludedReportExpenseTypes.has(e.expenseType));
+            const filteredPayments = incomingPayments
+              .filter(p => inRange(p.paymentDate))
+              .filter(p => !excludedReportIncomeTypes.has(p.paymentType));
 
             const totalExpenses = filteredExpenses.reduce((s, e) => s + e.amount, 0);
             const totalIncomingRaw = filteredPayments.reduce((s, p) => s + p.amount, 0);
@@ -4082,6 +4095,8 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
               ? "Last 7 Days"
               : reportMode === "lastMonth"
               ? new Date(today.getFullYear(), today.getMonth() - 1, 1).toLocaleString("default", { month: "long", year: "numeric" })
+              : reportMode === "month"
+              ? new Date(rangeStart).toLocaleString("default", { month: "long", year: "numeric" })
               : (rangeStart && rangeEnd ? `${rangeStart} to ${rangeEnd}` : "Custom Range");
 
             const canGenerate = reportMode !== "custom" || (reportStartDate && reportEndDate && reportStartDate <= reportEndDate);
@@ -4116,7 +4131,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
 
                   {/* Quick selectors */}
                   <div className="flex gap-2 flex-wrap mb-4">
-                    {([["lastWeek", "Last Week"], ["lastMonth", "Last Month"], ["custom", "Custom Range"]] as const).map(([mode, label]) => (
+                    {([["lastWeek", "Last Week"], ["lastMonth", "Last Month"], ["month", "Month"], ["custom", "Custom Range"]] as const).map(([mode, label]) => (
                       <button key={mode} type="button"
                         onClick={() => setReportMode(mode)}
                         className={`px-4 py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
@@ -4143,6 +4158,51 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                       <Users className="w-3.5 h-3.5" />
                       Resident Count
                     </button>
+                  </div>
+
+                  {/* Month picker */}
+                  {reportMode === "month" && (
+                    <div className="mb-4">
+                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Month</label>
+                      <input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)}
+                        className="w-full sm:w-auto bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none focus:border-indigo-500" />
+                    </div>
+                  )}
+
+                  {/* Category filters */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <div>
+                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Expense categories</label>
+                      <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+                        {(["Employee Salaries", "Grocery Bills", "Utility Bills", "Vegetables", "Repairs", "Advance Return", "Others"] as ExpenseType[]).map(t => (
+                          <label key={t} className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 cursor-pointer">
+                            <input type="checkbox" checked={!excludedReportExpenseTypes.has(t)}
+                              onChange={() => setExcludedReportExpenseTypes(prev => {
+                                const next = new Set(prev);
+                                if (next.has(t)) next.delete(t); else next.add(t);
+                                return next;
+                              })} />
+                            {t}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Income categories</label>
+                      <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+                        {(["Hostel Resident Monthly", "Hotel Payment", "Temporary Accommodation Payment", "Others"] as IncomingPaymentType[]).map(t => (
+                          <label key={t} className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 cursor-pointer">
+                            <input type="checkbox" checked={!excludedReportIncomeTypes.has(t)}
+                              onChange={() => setExcludedReportIncomeTypes(prev => {
+                                const next = new Set(prev);
+                                if (next.has(t)) next.delete(t); else next.add(t);
+                                return next;
+                              })} />
+                            {t}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Custom date range */}
