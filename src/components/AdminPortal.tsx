@@ -256,6 +256,14 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
   const [expPaidBy, setExpPaidBy] = useState("");
   const [expNotes, setExpNotes] = useState("");
 
+  // Expenses listing filters (separate from the add/edit form state above)
+  const [expListSearch, setExpListSearch] = useState("");
+  const [expListTypeFilter, setExpListTypeFilter] = useState<ExpenseType | "all">("all");
+  const [expListDateMode, setExpListDateMode] = useState<"all" | "month" | "custom">("all");
+  const [expListMonth, setExpListMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [expListStartDate, setExpListStartDate] = useState("");
+  const [expListEndDate, setExpListEndDate] = useState("");
+
   // Form State - Incoming Payment
   const [isAddingIncomingPayment, setIsAddingIncomingPayment] = useState(false);
   const [isEditingIncomingPaymentId, setIsEditingIncomingPaymentId] = useState<string | null>(null);
@@ -3784,6 +3792,23 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
               .filter(e => e.dateOfPayment.startsWith(lastMonthKey))
               .reduce((s, e) => s + e.amount, 0);
 
+            const expListQuery = expListSearch.trim().toLowerCase();
+            const filteredExpenseList = expenses.filter(e => {
+              if (expListTypeFilter !== "all" && e.expenseType !== expListTypeFilter) return false;
+              if (expListDateMode === "month") {
+                if (!e.dateOfPayment.startsWith(expListMonth)) return false;
+              } else if (expListDateMode === "custom") {
+                if (expListStartDate && e.dateOfPayment < expListStartDate) return false;
+                if (expListEndDate && e.dateOfPayment > expListEndDate) return false;
+              }
+              if (
+                expListQuery &&
+                !`${e.title} ${e.recipient} ${e.paidBy} ${e.notes || ""}`.toLowerCase().includes(expListQuery)
+              )
+                return false;
+              return true;
+            });
+
             return (
               <div className="space-y-6" id="expenses-tab">
                 {/* Summary cards */}
@@ -3818,7 +3843,9 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-5 rounded-2xl border border-slate-150 shadow-sm">
                   <div>
                     <h3 className="text-base font-extrabold text-slate-900">Expense Records</h3>
-                    <p className="text-xs text-slate-400 mt-0.5">{expenses.length} total</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {filteredExpenseList.length} of {expenses.length} total
+                    </p>
                   </div>
                   <button
                     onClick={() => { resetExpenseForm(); setIsAddingExpense(!isAddingExpense); }}
@@ -3827,6 +3854,64 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                     <Plus className="w-4 h-4" />
                     {isAddingExpense ? "Cancel" : "Add Expense"}
                   </button>
+                </div>
+
+                {/* Filters */}
+                <div className="bg-white p-5 rounded-2xl border border-slate-150 shadow-sm space-y-4">
+                  <div className="flex gap-2 flex-wrap">
+                    {([["all", "All Time"], ["month", "Month"], ["custom", "Custom Range"]] as const).map(([mode, label]) => (
+                      <button key={mode} type="button"
+                        onClick={() => setExpListDateMode(mode)}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                          expListDateMode === mode
+                            ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                            : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                        }`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {expListDateMode === "month" && (
+                    <div>
+                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Month</label>
+                      <input type="month" value={expListMonth} onChange={e => setExpListMonth(e.target.value)}
+                        className="w-full sm:w-auto bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none focus:border-indigo-500" />
+                    </div>
+                  )}
+
+                  {expListDateMode === "custom" && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Start Date</label>
+                        <input type="date" value={expListStartDate} onChange={e => setExpListStartDate(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none focus:border-indigo-500" />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">End Date</label>
+                        <input type="date" value={expListEndDate} onChange={e => setExpListEndDate(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none focus:border-indigo-500" />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Expense Type</label>
+                      <select value={expListTypeFilter} onChange={e => setExpListTypeFilter(e.target.value as ExpenseType | "all")}
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none">
+                        <option value="all">All Types</option>
+                        {(["Employee Salaries","Grocery Bills","Utility Bills","Vegetables","Repairs","Advance Return","Others"] as ExpenseType[]).map(t => (
+                          <option key={t} value={t}>{t}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Search</label>
+                      <input value={expListSearch} onChange={e => setExpListSearch(e.target.value)} placeholder="Title, recipient, paid by, notes…"
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none focus:border-indigo-500" />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Add / Edit Form */}
@@ -3946,9 +4031,13 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                   <div className="p-10 text-center text-slate-400 font-medium bg-white rounded-2xl border border-slate-200">
                     No expenses recorded yet. Click "Add Expense" to get started.
                   </div>
+                ) : filteredExpenseList.length === 0 ? (
+                  <div className="p-10 text-center text-slate-400 font-medium bg-white rounded-2xl border border-slate-200">
+                    No expenses match this filter.
+                  </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {expenses.map((exp) => (
+                    {filteredExpenseList.map((exp) => (
                       <div key={exp.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
                         {/* Color bar + title */}
                         <div className="px-4 pt-4 pb-3 border-b border-slate-100">
