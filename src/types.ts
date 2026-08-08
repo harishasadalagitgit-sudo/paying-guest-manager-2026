@@ -77,6 +77,21 @@ export interface VacatedResident {
   reason: string;
 }
 
+export interface Booking {
+  id: string;
+  name: string;
+  mobileNumber?: string;
+  roomNum?: string;
+  bedNum?: number;
+  expectedJoiningDate?: string;
+  advanceAmount?: number;
+  rentAmount?: number;
+  notes?: string;
+  bookedBy?: string;
+  bookedAt?: string;
+  status: "pending" | "moved-in" | "cancelled";
+}
+
 export interface Employee {
   id: string;
   name: string;

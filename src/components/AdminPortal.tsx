@@ -42,7 +42,8 @@ import {
   Receipt,
   Banknote,
   CreditCard as CreditCardIcon,
-  TrendingUp
+  TrendingUp,
+  ChevronDown
 } from "lucide-react";
 import { 
   collection, 
@@ -55,7 +56,7 @@ import {
   writeBatch
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { Room, Resident, Reminder, Enquiry, PaymentRecord, ResidentID, Employee, Expense, ExpenseType, IncomingPayment, IncomingPaymentType, HotelBookingRequest, VacatedResident } from "../types";
+import { Room, Resident, Reminder, Enquiry, PaymentRecord, ResidentID, Employee, Expense, ExpenseType, IncomingPayment, IncomingPaymentType, HotelBookingRequest, VacatedResident, Booking } from "../types";
 import { initialRoomsList, getFloorForRoom, ALL_ROOM_NUMBERS } from "../initialRooms";
 
 // Billing cycle = the resident's join-day anniversary each month (joined on
@@ -175,6 +176,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
   const [residents, setResidents] = useState<Resident[]>([]);
   const [vacatedResidents, setVacatedResidents] = useState<VacatedResident[]>([]);
   const [showVacatedResidents, setShowVacatedResidents] = useState(false);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
   const [serverEmails, setServerEmails] = useState<any[]>([]);
@@ -263,6 +265,21 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
   const [expListMonth, setExpListMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [expListStartDate, setExpListStartDate] = useState("");
   const [expListEndDate, setExpListEndDate] = useState("");
+  const [expListGroupBy, setExpListGroupBy] = useState<"none" | "date">("date");
+
+  // Outstanding rent card — expand/collapse + grouping
+  const [showOutstandingRent, setShowOutstandingRent] = useState(false);
+  const [outstandingGroupBy, setOutstandingGroupBy] = useState<"all" | "floor" | "room">("all");
+
+  // Incoming payments listing filters (separate from the add/edit form state below)
+  const [ipListRoomFilter, setIpListRoomFilter] = useState("all");
+  const [ipListResidentSearch, setIpListResidentSearch] = useState("");
+  const [ipListTypeFilter, setIpListTypeFilter] = useState<"all" | "rent" | "advance">("all");
+  const [ipListDateMode, setIpListDateMode] = useState<"all" | "month" | "custom">("all");
+  const [ipListMonth, setIpListMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [ipListStartDate, setIpListStartDate] = useState("");
+  const [ipListEndDate, setIpListEndDate] = useState("");
+  const [ipListGroupBy, setIpListGroupBy] = useState<"none" | "date" | "floor" | "room">("date");
 
   // Form State - Incoming Payment
   const [isAddingIncomingPayment, setIsAddingIncomingPayment] = useState(false);
@@ -289,8 +306,6 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
   const [reportStartDate, setReportStartDate] = useState("");
   const [reportEndDate, setReportEndDate] = useState("");
   const [reportShowResidents, setReportShowResidents] = useState(false);
-  const [excludedReportExpenseTypes, setExcludedReportExpenseTypes] = useState<Set<string>>(new Set());
-  const [excludedReportIncomeTypes, setExcludedReportIncomeTypes] = useState<Set<string>>(new Set());
 
   // Form State - Reminder
   const [remTitle, setRemTitle] = useState("");
@@ -452,7 +467,19 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
       (err) => console.error("VacatedResidents listener error:", err)
     );
 
-    // 10. Fetch Server Emails Visual Log
+    // 10. Bookings Listener (advance paid, not yet moved in — reserves a bed
+    // without occupying it; the desktop app writes/reads this same collection)
+    const bookingsUnsub = onSnapshot(
+      collection(db, "bookings"),
+      (snapshot) => {
+        const list: Booking[] = [];
+        snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as Booking));
+        setBookings(list);
+      },
+      (err) => console.error("Bookings listener error:", err)
+    );
+
+    // 11. Fetch Server Emails Visual Log
     fetchServerEmails();
 
     return () => {
@@ -465,8 +492,20 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
       incomingPaymentsUnsub();
       bookingRequestsUnsub();
       vacatedResidentsUnsub();
+      bookingsUnsub();
     };
   }, []);
+
+  // Pending bookings reserve a bed (advance paid, not yet moved in) without
+  // occupying it — the app treats those beds as non-vacant, so the website
+  // must too or the two "available beds" counts will never agree.
+  const pendingBookings = bookings.filter(b => b.status === "pending");
+  const reservedCountByRoom = new Map<string, number>();
+  pendingBookings.forEach(b => {
+    if (!b.roomNum) return;
+    reservedCountByRoom.set(b.roomNum, (reservedCountByRoom.get(b.roomNum) || 0) + 1);
+  });
+  const reservedBedSet = new Set(pendingBookings.filter(b => b.roomNum && b.bedNum).map(b => `${b.roomNum}-${b.bedNum}`));
 
   const fetchServerEmails = async () => {
     try {
@@ -1715,7 +1754,10 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                   </div>
                   <div>
                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wide">Vacant / Empty Beds</h3>
-                    <p className="text-2xl font-black text-slate-800">{totalSlots - activeResidentsCount} Available</p>
+                    <p className="text-2xl font-black text-slate-800">{Math.max(0, totalSlots - activeResidentsCount - pendingBookings.length)} Available</p>
+                    {pendingBookings.length > 0 && (
+                      <p className="text-[10px] text-slate-400 mt-0.5">{pendingBookings.length} reserved (booked, not moved in)</p>
+                    )}
                   </div>
                 </div>
 
@@ -1910,8 +1952,9 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                       const acType = room.acType || "Non-AC";
                       const capacity = room.capacity || 6;
                       const roomResidents = residents.filter(r => r.roomNum === room.roomNum);
-                      const isFull = room.occupiedCount >= capacity;
-                      const isEmpty = room.occupiedCount === 0;
+                      const roomReservedCount = reservedCountByRoom.get(room.roomNum) || 0;
+                      const isFull = (room.occupiedCount + roomReservedCount) >= capacity;
+                      const isEmpty = room.occupiedCount === 0 && roomReservedCount === 0;
                       const unassigned = roomResidents.filter(r => !r.bedNum);
                       const beds = Array.from({ length: capacity }, (_, i) => {
                         const bn = i + 1;
@@ -1946,7 +1989,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                               <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md border bg-slate-100 text-slate-600 border-slate-200">Hostel</span>
                             </div>
                             <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${statusBadge}`}>
-                              {isFull ? "Full" : isEmpty ? "Vacant" : `${capacity - room.occupiedCount} Left`}
+                              {isFull ? "Full" : isEmpty ? "Vacant" : `${capacity - room.occupiedCount - roomReservedCount} Left`}
                             </span>
                           </div>
 
@@ -1957,38 +2000,48 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
 
                           {/* Bed cells grid */}
                           <div className="grid grid-cols-3 gap-1.5">
-                            {beds.map((resident, i) => (
-                              <div
-                                key={i}
-                                className={`rounded-xl p-1.5 flex flex-col items-center gap-1 border ${resident ? "bg-red-50 border-red-200" : "bg-green-50 border-green-200"}`}
-                              >
-                                <img
-                                  src="/bedimageforicon.png"
-                                  alt="bed"
-                                  className="w-12 h-9 object-contain"
-                                  style={resident ? { filter: "sepia(1) saturate(8) hue-rotate(310deg) brightness(0.9)" } : { filter: "sepia(0.3) saturate(1.5) hue-rotate(80deg) brightness(1.05)" }}
-                                />
-                                {resident ? (
-                                  <div className="flex items-center justify-center gap-1 w-full flex-wrap">
-                                    <span className="text-[7px] font-black text-red-400">B{i + 1}</span>
-                                    <a href={`tel:${resident.mobileNumber}`} title={resident.mobileNumber} className="flex items-center" onClick={(e) => e.stopPropagation()}>
-                                      <Phone className="w-2.5 h-2.5 text-blue-500" />
-                                    </a>
-                                    <span className={`text-[7px] font-bold ${Number(resident.balanceAmount) === 0 ? "text-yellow-500" : "text-red-600"}`}>₹{resident.balanceAmount}</span>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-1">
-                                    <span className="text-[7px] font-black text-green-500">B{i + 1}</span>
-                                    <span className="text-[7px] text-green-600 font-semibold">Free</span>
-                                  </div>
-                                )}
-                              </div>
-                            ))}
+                            {beds.map((resident, i) => {
+                              const bedBooking = !resident ? pendingBookings.find(b => b.roomNum === room.roomNum && b.bedNum === i + 1) : undefined;
+                              return (
+                                <div
+                                  key={i}
+                                  className={`rounded-xl p-1.5 flex flex-col items-center gap-1 border ${resident ? "bg-red-50 border-red-200" : bedBooking ? "bg-amber-50 border-amber-200" : "bg-green-50 border-green-200"}`}
+                                >
+                                  <img
+                                    src="/bedimageforicon.png"
+                                    alt="bed"
+                                    className="w-12 h-9 object-contain"
+                                    style={resident ? { filter: "sepia(1) saturate(8) hue-rotate(310deg) brightness(0.9)" } : bedBooking ? { filter: "sepia(1) saturate(6) hue-rotate(10deg) brightness(1)" } : { filter: "sepia(1) saturate(8) hue-rotate(80deg) brightness(0.9)" }}
+                                  />
+                                  {resident ? (
+                                    <div className="flex items-center justify-center gap-1 w-full flex-wrap">
+                                      <span className="text-[7px] font-black text-red-400">B{i + 1}</span>
+                                      <a href={`tel:${resident.mobileNumber}`} title={resident.mobileNumber} className="flex items-center" onClick={(e) => e.stopPropagation()}>
+                                        <Phone className="w-2.5 h-2.5 text-blue-500" />
+                                      </a>
+                                      <span className={`text-[7px] font-bold ${Number(resident.balanceAmount) === 0 ? "text-yellow-500" : "text-red-600"}`}>₹{resident.balanceAmount}</span>
+                                    </div>
+                                  ) : bedBooking ? (
+                                    <div className="flex items-center gap-1" title={`Booked by ${bedBooking.name}`}>
+                                      <span className="text-[7px] font-black text-amber-500">B{i + 1}</span>
+                                      <span className="text-[7px] text-amber-600 font-semibold truncate max-w-[42px]">Booked</span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1">
+                                      <span className="text-[7px] font-black text-green-500">B{i + 1}</span>
+                                      <span className="text-[7px] text-green-600 font-semibold">Free</span>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
                           </div>
 
                           {/* Footer: count + capacity selector */}
                           <div className="flex items-center justify-between border-t border-slate-100 pt-1.5">
-                            <span className="text-[10px] text-slate-500 font-bold">{room.occupiedCount}/{capacity} occupied</span>
+                            <span className="text-[10px] text-slate-500 font-bold">
+                              {room.occupiedCount}/{capacity} occupied{roomReservedCount > 0 ? ` · ${roomReservedCount} booked` : ""}
+                            </span>
                             <div className="flex items-center gap-1">
                               <span className="text-[9px] text-slate-400 font-medium">Cap:</span>
                               <select
@@ -3444,9 +3497,9 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
               "Others":                         "bg-slate-100 text-slate-600 border-slate-200",
             };
             const now = new Date();
-            const thisMonthKey = now.toISOString().slice(0, 7);
+            const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
             const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-            const lastMonthKey = lastMonthDate.toISOString().slice(0, 7);
+            const lastMonthKey = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, "0")}`;
             const thisMonthName = now.toLocaleString("default", { month: "long", year: "numeric" });
             const lastMonthName = lastMonthDate.toLocaleString("default", { month: "long", year: "numeric" });
 
@@ -3464,6 +3517,26 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
             const hostelResidents = residents.filter(r => hostelResidentRooms.has(r.roomNum));
             const outstandingRent = hostelResidents.reduce((s, r) => s + (Number(r.balanceAmount) || 0), 0);
             const residentsWithBalance = hostelResidents.filter(r => Number(r.balanceAmount) > 0);
+
+            const isAdvancePayment = (p: IncomingPayment) => (p.notes || "").startsWith("Advance / security deposit");
+            const ipRoomOptions = Array.from(new Set(incomingPayments.map(p => p.roomNum).filter(Boolean) as string[]))
+              .sort((a, b) => Number(a) - Number(b));
+            const ipResidentQuery = ipListResidentSearch.trim().toLowerCase();
+            const filteredPaymentsList = incomingPayments.filter(p => {
+              if (ipListRoomFilter !== "all" && p.roomNum !== ipListRoomFilter) return false;
+              if (ipResidentQuery && !(p.residentName || "").toLowerCase().includes(ipResidentQuery)) return false;
+              if (ipListTypeFilter === "rent" && p.paymentType !== "Hostel Resident Monthly") return false;
+              if (ipListTypeFilter === "advance" && !isAdvancePayment(p)) return false;
+              if (ipListDateMode === "month") {
+                if (!p.paymentDate.startsWith(ipListMonth)) return false;
+              } else if (ipListDateMode === "custom") {
+                if (ipListStartDate && p.paymentDate < ipListStartDate) return false;
+                if (ipListEndDate && p.paymentDate > ipListEndDate) return false;
+              }
+              return true;
+            });
+            const filteredPaymentsTotal = filteredPaymentsList.reduce((s, p) => s + p.amount, 0);
+            const ipListIsFiltered = ipListRoomFilter !== "all" || ipResidentQuery !== "" || ipListTypeFilter !== "all" || ipListDateMode !== "all";
 
             return (
               <div className="space-y-6" id="incoming-payments-tab">
@@ -3521,32 +3594,121 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                         <p className="text-[11px] text-red-400 font-medium mt-0.5">Hostel residents only · {hostelResidents.length} resident{hostelResidents.length !== 1 ? "s" : ""} total</p>
                       </div>
                     </div>
-                    <p className="text-4xl font-black text-red-600">₹{outstandingRent.toLocaleString()}</p>
-                  </div>
-                  {residentsWithBalance.length > 0 && (
-                    <div className="mt-4 border-t border-red-200 pt-3 flex flex-wrap gap-2">
-                      {residentsWithBalance.map(r => (
-                        <div key={r.id} className="flex items-center gap-1.5 bg-white border border-red-100 rounded-lg px-2.5 py-1.5 text-[11px]">
-                          <span className="font-bold text-slate-700 truncate max-w-[90px]">{r.name}</span>
-                          <span className="text-slate-400">·</span>
-                          <span className="text-xs text-slate-500">R{r.roomNum}</span>
-                          {r.bedNum && <><span className="text-slate-400">·</span><span className="text-xs text-slate-500">B{r.bedNum}</span></>}
-                          <span className="text-slate-400">·</span>
-                          <span className="font-black text-red-600">₹{Number(r.balanceAmount).toLocaleString()}</span>
-                        </div>
-                      ))}
+                    <div className="flex items-center gap-3">
+                      <p className="text-4xl font-black text-red-600">₹{outstandingRent.toLocaleString()}</p>
+                      {residentsWithBalance.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowOutstandingRent(v => !v)}
+                          className="flex items-center gap-1.5 bg-white hover:bg-red-100 text-red-600 border border-red-200 text-xs font-bold px-3 py-2 rounded-xl transition cursor-pointer"
+                        >
+                          {showOutstandingRent ? "Hide records" : "Show records"}
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showOutstandingRent ? "rotate-180" : ""}`} />
+                        </button>
+                      )}
                     </div>
-                  )}
+                  </div>
+
                   {residentsWithBalance.length === 0 && outstandingRent === 0 && (
                     <p className="mt-3 text-[11px] font-bold text-emerald-600">All hostel residents are cleared — no outstanding balance.</p>
                   )}
+
+                  {showOutstandingRent && residentsWithBalance.length > 0 && (() => {
+                    const floorOf = (roomNum: string) => getFloorForRoom(roomNum);
+                    const rowsTable = (rows: typeof residentsWithBalance) => (
+                      <table className="w-full text-xs table-fixed">
+                        <tbody className="bg-white divide-y divide-red-100">
+                          {[...rows].sort((a, b) => Number(b.balanceAmount) - Number(a.balanceAmount)).map((r) => (
+                            <tr key={r.id}>
+                              <td className="w-[45%] px-3 py-2.5 font-bold text-slate-700 truncate leading-tight">{r.name}</td>
+                              <td className="w-[35%] px-3 py-2.5 text-slate-500 truncate leading-tight">
+                                Room {r.roomNum}{r.bedNum ? ` · Bed ${r.bedNum}` : ""}
+                              </td>
+                              <td className="w-[20%] px-3 py-2.5 text-right font-black text-red-600 leading-tight">₹{Number(r.balanceAmount).toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    );
+
+                    let groups: { key: string; label: string; rows: typeof residentsWithBalance; subtotal: number }[];
+                    if (outstandingGroupBy === "all") {
+                      groups = [{ key: "all", label: "All", rows: residentsWithBalance, subtotal: outstandingRent }];
+                    } else if (outstandingGroupBy === "floor") {
+                      const byFloor = new Map<number, typeof residentsWithBalance>();
+                      residentsWithBalance.forEach(r => {
+                        const f = floorOf(r.roomNum);
+                        byFloor.set(f, [...(byFloor.get(f) || []), r]);
+                      });
+                      groups = Array.from(byFloor.entries())
+                        .sort(([a], [b]) => a - b)
+                        .map(([floor, rows]) => ({
+                          key: `floor-${floor}`,
+                          label: `Floor ${floor}`,
+                          rows,
+                          subtotal: rows.reduce((s, r) => s + Number(r.balanceAmount), 0)
+                        }));
+                    } else {
+                      const byRoom = new Map<string, typeof residentsWithBalance>();
+                      residentsWithBalance.forEach(r => {
+                        byRoom.set(r.roomNum, [...(byRoom.get(r.roomNum) || []), r]);
+                      });
+                      groups = Array.from(byRoom.entries())
+                        .sort(([a], [b]) => Number(a) - Number(b))
+                        .map(([room, rows]) => ({
+                          key: `room-${room}`,
+                          label: `Room ${room}`,
+                          rows,
+                          subtotal: rows.reduce((s, r) => s + Number(r.balanceAmount), 0)
+                        }));
+                    }
+
+                    return (
+                      <div className="mt-4 border-t border-red-200 pt-3 space-y-3">
+                        <div className="w-full sm:w-56">
+                          <label className="block text-[11px] font-black text-red-400 uppercase tracking-wider mb-1">Group by</label>
+                          <select
+                            value={outstandingGroupBy}
+                            onChange={e => setOutstandingGroupBy(e.target.value as "all" | "floor" | "room")}
+                            className="w-full bg-white border border-red-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none focus:border-red-400"
+                          >
+                            <option value="all">All (flat list)</option>
+                            <option value="floor">Floor-wise</option>
+                            <option value="room">Room-wise</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                          {groups.map(g => (
+                            <div key={g.key} className="rounded-lg border border-red-100 overflow-hidden">
+                              {outstandingGroupBy !== "all" && (
+                                <div className="flex items-center justify-between bg-red-100 px-3 py-1.5">
+                                  <span className="text-[11px] font-black text-red-700">{g.label}</span>
+                                  <span className="text-[11px] font-black text-red-700">₹{g.subtotal.toLocaleString()}</span>
+                                </div>
+                              )}
+                              {rowsTable(g.rows)}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
                   <div>
                     <h3 className="text-base font-extrabold text-slate-900">Incoming Payments</h3>
-                    <p className="text-xs text-slate-400 mt-0.5">{incomingPayments.length} total</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {filteredPaymentsList.length} of {incomingPayments.length} total
+                    </p>
+                    {ipListIsFiltered && (
+                      <p className="text-lg font-black text-indigo-600 mt-1">
+                        ₹{filteredPaymentsTotal.toLocaleString()}
+                        <span className="text-[11px] font-bold text-slate-400 ml-1.5">filtered total</span>
+                      </p>
+                    )}
                   </div>
                   <button
                     onClick={() => { resetIncomingPaymentForm(); setIsAddingIncomingPayment(!isAddingIncomingPayment); }}
@@ -3555,6 +3717,83 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                     <Plus className="w-4 h-4" />
                     {isAddingIncomingPayment ? "Cancel" : "Record Payment"}
                   </button>
+                </div>
+
+                {/* Filters */}
+                <div className="bg-white p-5 rounded-2xl border border-slate-150 shadow-sm space-y-4">
+                  <div className="flex gap-2 flex-wrap">
+                    {([["all", "All Time"], ["month", "Month"], ["custom", "Custom Range"]] as const).map(([mode, label]) => (
+                      <button key={mode} type="button"
+                        onClick={() => setIpListDateMode(mode)}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                          ipListDateMode === mode
+                            ? "bg-green-600 text-white border-green-600 shadow-sm"
+                            : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                        }`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {ipListDateMode === "month" && (
+                    <div>
+                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Month</label>
+                      <input type="month" value={ipListMonth} onChange={e => setIpListMonth(e.target.value)}
+                        className="w-full sm:w-auto bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none focus:border-green-500" />
+                    </div>
+                  )}
+
+                  {ipListDateMode === "custom" && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Start Date</label>
+                        <input type="date" value={ipListStartDate} onChange={e => setIpListStartDate(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none focus:border-green-500" />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">End Date</label>
+                        <input type="date" value={ipListEndDate} onChange={e => setIpListEndDate(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none focus:border-green-500" />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Room</label>
+                      <select value={ipListRoomFilter} onChange={e => setIpListRoomFilter(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none">
+                        <option value="all">All Rooms</option>
+                        {ipRoomOptions.map(r => (
+                          <option key={r} value={r}>Room {r}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Resident</label>
+                      <input value={ipListResidentSearch} onChange={e => setIpListResidentSearch(e.target.value)} placeholder="Search resident name…"
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none focus:border-green-500" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Type</label>
+                      <select value={ipListTypeFilter} onChange={e => setIpListTypeFilter(e.target.value as "all" | "rent" | "advance")}
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none">
+                        <option value="all">All Types</option>
+                        <option value="rent">Rent</option>
+                        <option value="advance">Advance</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Group by</label>
+                      <select value={ipListGroupBy} onChange={e => setIpListGroupBy(e.target.value as "none" | "date" | "floor" | "room")}
+                        className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none">
+                        <option value="none">No grouping</option>
+                        <option value="date">Group by Date</option>
+                        <option value="floor">Floor-wise</option>
+                        <option value="room">Room-wise</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Add / Edit Form */}
@@ -3680,89 +3919,143 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                   </form>
                 )}
 
-                {/* Payment Tiles */}
-                {incomingPayments.length === 0 ? (
-                  <div className="p-10 text-center text-slate-400 font-medium bg-white rounded-2xl border border-slate-200">
-                    No payments recorded yet. Click "Record Payment" to get started.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {incomingPayments.map((p) => (
-                      <div key={p.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
-                        {/* Top */}
-                        <div className="px-4 pt-4 pb-3 border-b border-slate-100">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-extrabold text-slate-800 text-sm leading-tight truncate">{p.title}</h4>
-                              <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-full border mt-1 ${PAYMENT_TYPE_COLORS[p.paymentType]}`}>{p.paymentType}</span>
-                            </div>
-                            <div className="text-right flex-shrink-0">
-                              <p className="text-base font-black text-green-600">₹{p.amount.toLocaleString()}</p>
-                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${p.paidInCash ? "bg-green-50 text-green-600" : "bg-blue-50 text-blue-600"}`}>
-                                {p.paidInCash ? "Cash" : "UPI"}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
+                {/* Payment Records */}
+                {(() => {
+                  const renderRow = (p: IncomingPayment) => (
+                    <tr key={p.id} className="hover:bg-slate-50">
+                      <td className="w-[11%] px-4 py-2.5 text-slate-500 leading-tight whitespace-nowrap">{p.paymentDate}</td>
+                      <td className="w-[24%] px-4 py-2.5 leading-tight">
+                        <div className="font-bold text-slate-800 truncate">{p.title}</div>
+                        {p.notes && <div className="text-[10px] text-slate-400 truncate">{p.notes}</div>}
+                      </td>
+                      <td className="w-[14%] px-4 py-2.5 leading-tight">
+                        <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-full border ${PAYMENT_TYPE_COLORS[p.paymentType]}`}>{p.paymentType}</span>
+                      </td>
+                      <td className="w-[13%] px-4 py-2.5 text-slate-500 leading-tight truncate">
+                        {p.roomNum ? `Room ${p.roomNum}` : "—"}{p.bedNum ? ` · Bed ${p.bedNum}` : ""}
+                      </td>
+                      <td className="w-[15%] px-4 py-2.5 text-slate-700 leading-tight truncate">{p.payee}</td>
+                      <td className="w-[8%] px-4 py-2.5 leading-tight">
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${p.paidInCash ? "bg-green-50 text-green-600" : "bg-blue-50 text-blue-600"}`}>
+                          {p.paidInCash ? "Cash" : "UPI"}
+                        </span>
+                      </td>
+                      <td className="w-[10%] px-4 py-2.5 text-right leading-tight">
+                        <div className="font-black text-green-600">₹{p.amount.toLocaleString()}</div>
+                        {p.balancePending > 0 && (
+                          <div className="text-[10px] font-bold text-red-500">₹{p.balancePending.toLocaleString()} pending</div>
+                        )}
+                      </td>
+                      <td className="w-[5%] px-4 py-2.5 text-right leading-tight whitespace-nowrap">
+                        <button onClick={() => startEditIncomingPayment(p)}
+                          className="p-1.5 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg transition cursor-pointer">
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>{" "}
+                        <button onClick={() => deleteIncomingPayment(p.id)}
+                          className="p-1.5 bg-white hover:bg-red-50 text-red-500 border border-slate-200 rounded-lg transition cursor-pointer">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
 
-                        {/* Details */}
-                        <div className="px-4 py-3 flex flex-col gap-1.5 flex-1">
-                          {/* Date */}
-                          <div className="flex items-center gap-2">
-                            <Calendar className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                            <span className="text-xs text-slate-500">{p.paymentDate}</span>
-                          </div>
-                          {/* Payee */}
-                          <div className="flex items-center gap-2">
-                            <UserCheck className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                            <span className="text-xs font-semibold text-slate-700 truncate">{p.payee}</span>
-                          </div>
-                          {/* Room + Bed */}
-                          {(p.roomNum || p.bedNum) && (
-                            <div className="flex items-center gap-2">
-                              <Bed className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                              <span className="text-xs text-slate-500">
-                                {p.roomNum ? `Room ${p.roomNum}` : ""}
-                                {p.roomNum && p.bedNum ? " · " : ""}
-                                {p.bedNum ? `Bed ${p.bedNum}` : ""}
-                              </span>
-                            </div>
-                          )}
-                          {/* PhonePe number */}
-                          {p.phonePayNumber && (
-                            <div className="flex items-center gap-2">
-                              <Phone className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
-                              <span className="text-xs font-semibold text-slate-600">{p.phonePayNumber}</span>
-                            </div>
-                          )}
-                          {/* Balance pending */}
-                          {p.balancePending > 0 && (
-                            <div className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-lg px-2 py-1 mt-0.5">
-                              <Receipt className="w-3 h-3 text-red-500 flex-shrink-0" />
-                              <span className="text-xs font-bold text-red-600">Balance pending: ₹{p.balancePending.toLocaleString()}</span>
-                            </div>
-                          )}
-                          {p.transactionNumber && (
-                            <p className="text-[10px] text-slate-400 truncate">Txn: <span className="font-mono text-slate-600">{p.transactionNumber}</span></p>
-                          )}
-                          {p.notes && <p className="text-[10px] italic text-slate-400 mt-0.5">{p.notes}</p>}
-                        </div>
+                  const tableHead = (
+                    <thead>
+                      <tr className="bg-slate-50">
+                        <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-wider px-4 py-2">Date</th>
+                        <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-wider px-4 py-2">Title</th>
+                        <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-wider px-4 py-2">Type</th>
+                        <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-wider px-4 py-2">Room / Bed</th>
+                        <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-wider px-4 py-2">Payee</th>
+                        <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-wider px-4 py-2">Mode</th>
+                        <th className="text-right text-[10px] font-black text-slate-400 uppercase tracking-wider px-4 py-2">Amount</th>
+                        <th className="px-4 py-2"></th>
+                      </tr>
+                    </thead>
+                  );
 
-                        {/* Actions */}
-                        <div className="border-t border-slate-100 px-4 py-2 flex justify-end gap-2">
-                          <button onClick={() => startEditIncomingPayment(p)}
-                            className="p-1.5 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg transition cursor-pointer">
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => deleteIncomingPayment(p.id)}
-                            className="p-1.5 bg-white hover:bg-red-50 text-red-500 border border-slate-200 rounded-lg transition cursor-pointer">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
+                  if (incomingPayments.length === 0) {
+                    return (
+                      <div className="p-10 text-center text-slate-400 font-medium bg-white rounded-2xl border border-slate-200">
+                        No payments recorded yet. Click "Record Payment" to get started.
                       </div>
-                    ))}
-                  </div>
-                )}
+                    );
+                  }
+                  if (filteredPaymentsList.length === 0) {
+                    return (
+                      <div className="p-10 text-center text-slate-400 font-medium bg-white rounded-2xl border border-slate-200">
+                        No payments match this filter.
+                      </div>
+                    );
+                  }
+                  if (ipListGroupBy === "none") {
+                    return (
+                      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+                        <table className="w-full text-xs table-fixed min-w-[900px]">
+                          {tableHead}
+                          <tbody className="divide-y divide-slate-100">
+                            {filteredPaymentsList.map(renderRow)}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  }
+
+                  const groupMap = new Map<string, { label: string; sortKey: number; rows: IncomingPayment[] }>();
+                  filteredPaymentsList.forEach(p => {
+                    if (ipListGroupBy === "date") {
+                      const key = p.paymentDate;
+                      const g = groupMap.get(key) || { label: p.paymentDate, sortKey: -Number(p.paymentDate.replace(/-/g, "")), rows: [] };
+                      g.rows.push(p);
+                      groupMap.set(key, g);
+                    } else if (ipListGroupBy === "floor") {
+                      if (!p.roomNum) {
+                        const key = "unassigned";
+                        const g = groupMap.get(key) || { label: "Unassigned", sortKey: 9999, rows: [] };
+                        g.rows.push(p);
+                        groupMap.set(key, g);
+                        return;
+                      }
+                      const floor = getFloorForRoom(p.roomNum);
+                      const key = `floor-${floor}`;
+                      const g = groupMap.get(key) || { label: `Floor ${floor}`, sortKey: floor, rows: [] };
+                      g.rows.push(p);
+                      groupMap.set(key, g);
+                    } else {
+                      const key = p.roomNum || "unassigned";
+                      const g = groupMap.get(key) || { label: p.roomNum ? `Room ${p.roomNum}` : "Unassigned", sortKey: p.roomNum ? Number(p.roomNum) : 9999, rows: [] };
+                      g.rows.push(p);
+                      groupMap.set(key, g);
+                    }
+                  });
+                  const groups = Array.from(groupMap.values()).sort((a, b) => a.sortKey - b.sortKey);
+
+                  return (
+                    <div className="space-y-6">
+                      {groups.map(g => {
+                        const subtotal = g.rows.reduce((s, p) => s + p.amount, 0);
+                        return (
+                          <div key={g.label}>
+                            <div className="flex items-center justify-between bg-slate-100 rounded-xl px-4 py-2 mb-3">
+                              <span className="text-xs font-black text-slate-700">{g.label}</span>
+                              <span className="text-xs font-black text-slate-700">
+                                {g.rows.length} payment{g.rows.length !== 1 ? "s" : ""} · ₹{subtotal.toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+                              <table className="w-full text-xs table-fixed min-w-[900px]">
+                                {tableHead}
+                                <tbody className="divide-y divide-slate-100">
+                                  {g.rows.map(renderRow)}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })()}
@@ -3779,9 +4072,9 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
               "Others":            "bg-slate-100 text-slate-600 border-slate-200",
             };
             const now = new Date();
-            const thisMonthKey = now.toISOString().slice(0, 7); // "YYYY-MM"
+            const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
             const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-            const lastMonthKey = lastMonthDate.toISOString().slice(0, 7);
+            const lastMonthKey = `${lastMonthDate.getFullYear()}-${String(lastMonthDate.getMonth() + 1).padStart(2, "0")}`;
             const thisMonthName = now.toLocaleString("default", { month: "long", year: "numeric" });
             const lastMonthName = lastMonthDate.toLocaleString("default", { month: "long", year: "numeric" });
 
@@ -3808,6 +4101,8 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                 return false;
               return true;
             });
+            const filteredTotal = filteredExpenseList.reduce((s, e) => s + e.amount, 0);
+            const isFiltered = expListTypeFilter !== "all" || expListDateMode !== "all" || expListSearch.trim() !== "";
 
             return (
               <div className="space-y-6" id="expenses-tab">
@@ -3846,6 +4141,12 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                     <p className="text-xs text-slate-400 mt-0.5">
                       {filteredExpenseList.length} of {expenses.length} total
                     </p>
+                    {isFiltered && (
+                      <p className="text-lg font-black text-indigo-600 mt-1">
+                        ₹{filteredTotal.toLocaleString()}
+                        <span className="text-[11px] font-bold text-slate-400 ml-1.5">filtered total</span>
+                      </p>
+                    )}
                   </div>
                   <button
                     onClick={() => { resetExpenseForm(); setIsAddingExpense(!isAddingExpense); }}
@@ -3895,7 +4196,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Expense Type</label>
                       <select value={expListTypeFilter} onChange={e => setExpListTypeFilter(e.target.value as ExpenseType | "all")}
@@ -3910,6 +4211,20 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                       <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Search</label>
                       <input value={expListSearch} onChange={e => setExpListSearch(e.target.value)} placeholder="Title, recipient, paid by, notes…"
                         className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none focus:border-indigo-500" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Grouping</label>
+                      <button
+                        type="button"
+                        onClick={() => setExpListGroupBy(v => v === "date" ? "none" : "date")}
+                        className={`w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-lg text-xs font-bold border transition cursor-pointer ${
+                          expListGroupBy === "date"
+                            ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                            : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        {expListGroupBy === "date" ? "Grouped by date" : "No grouping"}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -4026,88 +4341,133 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                   </form>
                 )}
 
-                {/* Expense Tiles */}
-                {expenses.length === 0 ? (
-                  <div className="p-10 text-center text-slate-400 font-medium bg-white rounded-2xl border border-slate-200">
-                    No expenses recorded yet. Click "Add Expense" to get started.
-                  </div>
-                ) : filteredExpenseList.length === 0 ? (
-                  <div className="p-10 text-center text-slate-400 font-medium bg-white rounded-2xl border border-slate-200">
-                    No expenses match this filter.
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredExpenseList.map((exp) => (
-                      <div key={exp.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
-                        {/* Color bar + title */}
-                        <div className="px-4 pt-4 pb-3 border-b border-slate-100">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-extrabold text-slate-800 text-sm leading-tight truncate">{exp.title}</h4>
-                              <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-full border mt-1 ${EXPENSE_TYPE_COLORS[exp.expenseType]}`}>{exp.expenseType}</span>
-                            </div>
-                            <div className="text-right flex-shrink-0">
-                              <p className="text-base font-black text-slate-800">₹{exp.amount.toLocaleString()}</p>
-                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${exp.paidInCash ? "bg-green-50 text-green-600" : "bg-blue-50 text-blue-600"}`}>
-                                {exp.paidInCash ? "Cash" : "Online"}
+                {/* Expense Records */}
+                {(() => {
+                  if (expenses.length === 0) {
+                    return (
+                      <div className="p-10 text-center text-slate-400 font-medium bg-white rounded-2xl border border-slate-200">
+                        No expenses recorded yet. Click "Add Expense" to get started.
+                      </div>
+                    );
+                  }
+                  if (filteredExpenseList.length === 0) {
+                    return (
+                      <div className="p-10 text-center text-slate-400 font-medium bg-white rounded-2xl border border-slate-200">
+                        No expenses match this filter.
+                      </div>
+                    );
+                  }
+
+                  const renderRow = (exp: Expense, showDate: boolean) => (
+                    <tr key={exp.id} className="hover:bg-slate-50">
+                      {showDate && (
+                        <td className="px-4 py-2.5 text-slate-500 leading-tight whitespace-nowrap">
+                          {exp.dateOfPayment}{exp.timeOfPayment ? ` ${exp.timeOfPayment}` : ""}
+                        </td>
+                      )}
+                      <td className="px-4 py-2.5 leading-tight">
+                        <div className="font-bold text-slate-800 truncate">{exp.title}</div>
+                        {exp.notes && <div className="text-[10px] text-slate-400 truncate">{exp.notes}</div>}
+                      </td>
+                      <td className="px-4 py-2.5 leading-tight">
+                        <span className={`inline-block text-[9px] font-bold px-2 py-0.5 rounded-full border ${EXPENSE_TYPE_COLORS[exp.expenseType]}`}>{exp.expenseType}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-700 leading-tight truncate">
+                        {exp.recipient}{exp.recipientCompany ? ` · ${exp.recipientCompany}` : ""}
+                      </td>
+                      <td className="px-4 py-2.5 text-slate-500 leading-tight truncate">{exp.paidBy || "—"}</td>
+                      <td className="px-4 py-2.5 leading-tight">
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md ${exp.paidInCash ? "bg-green-50 text-green-600" : "bg-blue-50 text-blue-600"}`}>
+                          {exp.paidInCash ? "Cash" : "Online"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-right leading-tight">
+                        <div className="font-black text-slate-800">₹{exp.amount.toLocaleString()}</div>
+                        {exp.balancePending > 0 && (
+                          <div className="text-[10px] font-bold text-red-500">₹{exp.balancePending.toLocaleString()} pending</div>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-right leading-tight whitespace-nowrap">
+                        <button onClick={() => startEditExpense(exp)}
+                          className="p-1.5 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg transition cursor-pointer">
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>{" "}
+                        <button onClick={() => deleteExpense(exp.id)}
+                          className="p-1.5 bg-white hover:bg-red-50 text-red-500 border border-slate-200 rounded-lg transition cursor-pointer">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+
+                  if (expListGroupBy === "none") {
+                    return (
+                      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+                        <table className="w-full text-xs table-fixed min-w-[900px]">
+                          <thead>
+                            <tr className="bg-slate-50">
+                              <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-wider px-4 py-2 w-[11%]">Date</th>
+                              <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-wider px-4 py-2 w-[24%]">Title</th>
+                              <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-wider px-4 py-2 w-[14%]">Type</th>
+                              <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-wider px-4 py-2 w-[17%]">Recipient</th>
+                              <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-wider px-4 py-2 w-[15%]">Paid By</th>
+                              <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-wider px-4 py-2 w-[8%]">Mode</th>
+                              <th className="text-right text-[10px] font-black text-slate-400 uppercase tracking-wider px-4 py-2 w-[10%]">Amount</th>
+                              <th className="px-4 py-2 w-[5%]"></th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {filteredExpenseList.map((exp) => renderRow(exp, true))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  }
+
+                  // Group by date — subtotal + individual records per day
+                  const byDate = new Map<string, Expense[]>();
+                  filteredExpenseList.forEach(exp => {
+                    byDate.set(exp.dateOfPayment, [...(byDate.get(exp.dateOfPayment) || []), exp]);
+                  });
+                  const dateGroups = Array.from(byDate.entries()).sort(([a], [b]) => b.localeCompare(a));
+
+                  return (
+                    <div className="space-y-6">
+                      {dateGroups.map(([date, rows]) => {
+                        const subtotal = rows.reduce((s, e) => s + e.amount, 0);
+                        const dayLabel = new Date(date).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+                        return (
+                          <div key={date}>
+                            <div className="flex items-center justify-between bg-slate-100 rounded-xl px-4 py-2 mb-3">
+                              <span className="text-xs font-black text-slate-700">{dayLabel}</span>
+                              <span className="text-xs font-black text-slate-700">
+                                {rows.length} expense{rows.length !== 1 ? "s" : ""} · ₹{subtotal.toLocaleString()}
                               </span>
                             </div>
-                          </div>
-                        </div>
-
-                        {/* Details */}
-                        <div className="px-4 py-3 flex flex-col gap-1.5 flex-1">
-                          {/* Recipient */}
-                          <div className="flex items-center gap-2">
-                            <UserCheck className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                            <span className="text-xs font-semibold text-slate-700 truncate">{exp.recipient}{exp.recipientCompany ? ` · ${exp.recipientCompany}` : ""}</span>
-                          </div>
-                          {/* Date + Time */}
-                          <div className="flex items-center gap-2">
-                            <Calendar className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-                            <span className="text-xs text-slate-500">{exp.dateOfPayment}{exp.timeOfPayment ? ` at ${exp.timeOfPayment}` : ""}</span>
-                          </div>
-                          {/* Phone */}
-                          {exp.recipientPhone && (
-                            <a href={`tel:${exp.recipientPhone}`} className="flex items-center gap-2 group">
-                              <div className="w-5 h-5 rounded-full bg-indigo-50 flex items-center justify-center flex-shrink-0 group-hover:bg-indigo-100 transition">
-                                <Phone className="w-2.5 h-2.5 text-indigo-600" />
-                              </div>
-                              <span className="text-xs font-semibold text-slate-600 group-hover:text-indigo-600 transition">{exp.recipientPhone}</span>
-                            </a>
-                          )}
-                          {/* Balance pending */}
-                          {exp.balancePending > 0 && (
-                            <div className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-lg px-2 py-1 mt-0.5">
-                              <Receipt className="w-3 h-3 text-red-500 flex-shrink-0" />
-                              <span className="text-xs font-bold text-red-600">Balance pending: ₹{exp.balancePending.toLocaleString()}</span>
+                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+                              <table className="w-full text-xs table-fixed min-w-[820px]">
+                                <thead>
+                                  <tr className="bg-slate-50">
+                                    <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-wider px-4 py-2 w-[27%]">Title</th>
+                                    <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-wider px-4 py-2 w-[15%]">Type</th>
+                                    <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-wider px-4 py-2 w-[19%]">Recipient</th>
+                                    <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-wider px-4 py-2 w-[17%]">Paid By</th>
+                                    <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-wider px-4 py-2 w-[9%]">Mode</th>
+                                    <th className="text-right text-[10px] font-black text-slate-400 uppercase tracking-wider px-4 py-2 w-[11%]">Amount</th>
+                                    <th className="px-4 py-2 w-[6%]"></th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {rows.map((exp) => renderRow(exp, false))}
+                                </tbody>
+                              </table>
                             </div>
-                          )}
-                          {/* Paid by */}
-                          {exp.paidBy && (
-                            <p className="text-[10px] text-slate-400">Paid by: <span className="font-semibold text-slate-600">{exp.paidBy}</span></p>
-                          )}
-                          {exp.transactionNumber && (
-                            <p className="text-[10px] text-slate-400 truncate">Txn: <span className="font-mono text-slate-600">{exp.transactionNumber}</span></p>
-                          )}
-                          {exp.notes && <p className="text-[10px] italic text-slate-400 mt-0.5">{exp.notes}</p>}
-                        </div>
-
-                        {/* Actions */}
-                        <div className="border-t border-slate-100 px-4 py-2 flex justify-end gap-2">
-                          <button onClick={() => startEditExpense(exp)}
-                            className="p-1.5 bg-white hover:bg-slate-100 text-slate-600 border border-slate-200 rounded-lg transition cursor-pointer">
-                            <Edit3 className="w-3.5 h-3.5" />
-                          </button>
-                          <button onClick={() => deleteExpense(exp.id)}
-                            className="p-1.5 bg-white hover:bg-red-50 text-red-500 border border-slate-200 rounded-lg transition cursor-pointer">
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })()}
@@ -4115,6 +4475,10 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
           {/* Reports Tab */}
           {activeTab === "reports" && (() => {
             // Compute date range from mode
+            // NB: use local y/m/d formatting, NOT toISOString() — toISOString() converts to UTC,
+            // which in IST (UTC+5:30) rolls local midnight back to the previous calendar day.
+            const toLocalISODate = (d: Date) =>
+              `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
             const today = new Date();
             let rangeStart = "";
             let rangeEnd = "";
@@ -4124,19 +4488,19 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
               end.setDate(today.getDate() - 1);
               const start = new Date(end);
               start.setDate(end.getDate() - 6);
-              rangeStart = start.toISOString().slice(0, 10);
-              rangeEnd = end.toISOString().slice(0, 10);
+              rangeStart = toLocalISODate(start);
+              rangeEnd = toLocalISODate(end);
             } else if (reportMode === "lastMonth") {
               const lm = new Date(today.getFullYear(), today.getMonth() - 1, 1);
               const lmEnd = new Date(today.getFullYear(), today.getMonth(), 0);
-              rangeStart = lm.toISOString().slice(0, 10);
-              rangeEnd = lmEnd.toISOString().slice(0, 10);
+              rangeStart = toLocalISODate(lm);
+              rangeEnd = toLocalISODate(lmEnd);
             } else if (reportMode === "month") {
               const [y, m] = reportMonth.split("-").map(Number);
               const mStart = new Date(y, m - 1, 1);
               const mEnd = new Date(y, m, 0);
-              rangeStart = mStart.toISOString().slice(0, 10);
-              rangeEnd = mEnd.toISOString().slice(0, 10);
+              rangeStart = toLocalISODate(mStart);
+              rangeEnd = toLocalISODate(mEnd);
             } else {
               rangeStart = reportStartDate;
               rangeEnd = reportEndDate;
@@ -4144,41 +4508,25 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
 
             const inRange = (date: string) => date >= rangeStart && date <= rangeEnd;
 
-            const filteredExpenses = expenses
-              .filter(e => inRange(e.dateOfPayment))
-              .filter(e => !excludedReportExpenseTypes.has(e.expenseType));
-            const filteredPayments = incomingPayments
-              .filter(p => inRange(p.paymentDate))
-              .filter(p => !excludedReportIncomeTypes.has(p.paymentType));
+            const filteredExpenses = expenses.filter(e => inRange(e.dateOfPayment));
+            const filteredPayments = incomingPayments.filter(p => inRange(p.paymentDate));
 
             const totalExpenses = filteredExpenses.reduce((s, e) => s + e.amount, 0);
             const totalIncomingRaw = filteredPayments.reduce((s, p) => s + p.amount, 0);
 
-            // June 2026 net profit carried forward into July 2026
-            const june2026Incoming = incomingPayments
-              .filter(p => p.paymentDate.startsWith("2026-06"))
-              .reduce((s, p) => s + p.amount, 0);
-            const june2026Expenses = expenses
-              .filter(e => e.dateOfPayment.startsWith("2026-06"))
-              .reduce((s, e) => s + e.amount, 0);
-            const june2026NetProfit = june2026Incoming - june2026Expenses; // no rent in June
-            // Apply carry-forward only when the report range overlaps July 2026
-            const rangeIncludesJuly2026 = rangeStart <= "2026-07-31" && rangeEnd >= "2026-07-01";
-            const carryForward = rangeIncludesJuly2026 ? june2026NetProfit : 0;
-            const totalIncoming = totalIncomingRaw + carryForward;
-
-            // Building rent of ₹4.5L/month starts from July 2026
-            const RENT_START = "2026-07-01";
+            // Building rent of ₹4.5L/month applies Aug 2026 – Jul 2027 only (no rent June/July 2026; rate beyond Jul 2027 not yet set)
+            const RENT_START = "2026-08-01";
+            const RENT_END = "2027-07-31";
             let effectiveBuildingRent = 0;
-            if (rangeStart && rangeEnd && rangeEnd >= RENT_START) {
+            if (rangeStart && rangeEnd && rangeEnd >= RENT_START && rangeStart <= RENT_END) {
               const effectiveStart = rangeStart < RENT_START ? new Date(RENT_START) : new Date(rangeStart);
-              const effectiveEnd = new Date(rangeEnd);
+              const effectiveEnd = rangeEnd > RENT_END ? new Date(RENT_END) : new Date(rangeEnd);
               const rentMonths =
                 (effectiveEnd.getFullYear() - effectiveStart.getFullYear()) * 12 +
                 (effectiveEnd.getMonth() - effectiveStart.getMonth()) + 1;
               effectiveBuildingRent = Math.max(0, rentMonths) * BUILDING_RENT;
             }
-            const netProfit = totalIncoming - totalExpenses - effectiveBuildingRent;
+            const netProfit = totalIncomingRaw - totalExpenses - effectiveBuildingRent;
 
             const rangeLabel = reportMode === "lastWeek"
               ? "Last 7 Days"
@@ -4189,18 +4537,6 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
               : (rangeStart && rangeEnd ? `${rangeStart} to ${rangeEnd}` : "Custom Range");
 
             const canGenerate = reportMode !== "custom" || (reportStartDate && reportEndDate && reportStartDate <= reportEndDate);
-
-            // Expense breakdown by type
-            const expenseByType: Record<string, number> = {};
-            filteredExpenses.forEach(e => {
-              expenseByType[e.expenseType] = (expenseByType[e.expenseType] || 0) + e.amount;
-            });
-
-            // Incoming breakdown by type
-            const incomeByType: Record<string, number> = {};
-            filteredPayments.forEach(p => {
-              incomeByType[p.paymentType] = (incomeByType[p.paymentType] || 0) + p.amount;
-            });
 
             // Resident count for the period
             // All rooms are hostel rooms
@@ -4258,42 +4594,6 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                     </div>
                   )}
 
-                  {/* Category filters */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Expense categories</label>
-                      <div className="flex flex-wrap gap-x-3 gap-y-1.5">
-                        {(["Employee Salaries", "Grocery Bills", "Utility Bills", "Vegetables", "Repairs", "Advance Return", "Others"] as ExpenseType[]).map(t => (
-                          <label key={t} className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 cursor-pointer">
-                            <input type="checkbox" checked={!excludedReportExpenseTypes.has(t)}
-                              onChange={() => setExcludedReportExpenseTypes(prev => {
-                                const next = new Set(prev);
-                                if (next.has(t)) next.delete(t); else next.add(t);
-                                return next;
-                              })} />
-                            {t}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Income categories</label>
-                      <div className="flex flex-wrap gap-x-3 gap-y-1.5">
-                        {(["Hostel Resident Monthly", "Hotel Payment", "Temporary Accommodation Payment", "Others"] as IncomingPaymentType[]).map(t => (
-                          <label key={t} className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 cursor-pointer">
-                            <input type="checkbox" checked={!excludedReportIncomeTypes.has(t)}
-                              onChange={() => setExcludedReportIncomeTypes(prev => {
-                                const next = new Set(prev);
-                                if (next.has(t)) next.delete(t); else next.add(t);
-                                return next;
-                              })} />
-                            {t}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
                   {/* Custom date range */}
                   {reportMode === "custom" && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -4320,27 +4620,13 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                       <div className="h-px flex-1 bg-slate-200" />
                     </div>
 
-                    {/* 4 metric cards */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* 3 metric cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       {/* Total Incoming */}
                       <div className="bg-white border border-emerald-100 rounded-2xl p-5 shadow-sm">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Total Incoming Payments</p>
-                        <p className="text-3xl font-black text-emerald-600">₹{totalIncoming.toLocaleString()}</p>
+                        <p className="text-3xl font-black text-emerald-600">₹{totalIncomingRaw.toLocaleString()}</p>
                         <p className="text-[10px] text-slate-400 mt-1">{filteredPayments.length} payment{filteredPayments.length !== 1 ? "s" : ""}</p>
-                        {Object.entries(incomeByType).map(([type, amt]) => (
-                          <div key={type} className="flex justify-between items-center mt-1.5">
-                            <span className="text-[10px] text-slate-500 truncate">{type}</span>
-                            <span className="text-[10px] font-bold text-slate-700">₹{amt.toLocaleString()}</span>
-                          </div>
-                        ))}
-                        {carryForward !== 0 && (
-                          <div className="flex justify-between items-center mt-2 pt-2 border-t border-emerald-100">
-                            <span className="text-[10px] text-emerald-700 font-bold">Carried forward (June 2026)</span>
-                            <span className={`text-[10px] font-black ${carryForward >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                              {carryForward >= 0 ? "+" : "−"}₹{Math.abs(carryForward).toLocaleString()}
-                            </span>
-                          </div>
-                        )}
                       </div>
 
                       {/* Total Expenses */}
@@ -4348,22 +4634,6 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Total Expenses</p>
                         <p className="text-3xl font-black text-red-500">₹{totalExpenses.toLocaleString()}</p>
                         <p className="text-[10px] text-slate-400 mt-1">{filteredExpenses.length} expense{filteredExpenses.length !== 1 ? "s" : ""}</p>
-                        {Object.entries(expenseByType).map(([type, amt]) => (
-                          <div key={type} className="flex justify-between items-center mt-1.5">
-                            <span className="text-[10px] text-slate-500 truncate">{type}</span>
-                            <span className="text-[10px] font-bold text-slate-700">₹{amt.toLocaleString()}</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Building Rent */}
-                      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Building Rent</p>
-                        <p className="text-3xl font-black text-slate-600">₹{effectiveBuildingRent.toLocaleString()}</p>
-                        {effectiveBuildingRent === 0
-                          ? <p className="text-[10px] text-emerald-600 font-bold mt-1">No rent — starts July 2026</p>
-                          : <p className="text-[10px] text-slate-400 mt-1">₹{BUILDING_RENT.toLocaleString()} × {effectiveBuildingRent / BUILDING_RENT} month{effectiveBuildingRent / BUILDING_RENT !== 1 ? "s" : ""}</p>
-                        }
                       </div>
 
                       {/* Net Profit */}
@@ -4377,22 +4647,16 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                             <span className="text-slate-500">Incoming Payments</span>
                             <span className="font-bold text-emerald-600">+ ₹{totalIncomingRaw.toLocaleString()}</span>
                           </div>
-                          {carryForward !== 0 && (
-                            <div className="flex justify-between text-[10px]">
-                              <span className="text-slate-500">Carried fwd (June '26)</span>
-                              <span className={`font-bold ${carryForward >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                                {carryForward >= 0 ? "+" : "−"}₹{Math.abs(carryForward).toLocaleString()}
-                              </span>
-                            </div>
-                          )}
                           <div className="flex justify-between text-[10px]">
                             <span className="text-slate-500">Expenses</span>
                             <span className="font-bold text-red-500">− ₹{totalExpenses.toLocaleString()}</span>
                           </div>
-                          <div className="flex justify-between text-[10px]">
-                            <span className="text-slate-500">Building Rent</span>
-                            <span className="font-bold text-red-500">− ₹{effectiveBuildingRent.toLocaleString()}</span>
-                          </div>
+                          {effectiveBuildingRent > 0 && (
+                            <div className="flex justify-between text-[10px]">
+                              <span className="text-slate-500">Building Rent</span>
+                              <span className="font-bold text-red-500">− ₹{effectiveBuildingRent.toLocaleString()}</span>
+                            </div>
+                          )}
                           <div className="flex justify-between text-[10px] border-t border-slate-200 pt-1 mt-1">
                             <span className="font-black text-slate-700">Net</span>
                             <span className={`font-black ${netProfit >= 0 ? "text-emerald-600" : "text-red-600"}`}>
@@ -4403,19 +4667,33 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                       </div>
                     </div>
 
-                    {/* Occupancy Pie Charts */}
+                    {/* Occupancy Pie Charts — occupancy as of the selected report period,
+                        derived from joining dates (+ vacated residents' departure dates),
+                        not the live occupiedCount which only reflects occupancy right now. */}
                     {(() => {
                       const allRooms = rooms;
-                      const totalBeds    = allRooms.reduce((s, r) => s + (r.capacity || 0), 0);
-                      const totalOccupied = allRooms.reduce((s, r) => s + (r.occupiedCount || 0), 0);
-                      const totalVacant  = totalBeds - totalOccupied;
+                      const totalBeds = allRooms.reduce((s, r) => s + (r.capacity || 6), 0);
+                      const asOfDate = rangeEnd || toLocalISODate(today);
+
+                      const activeAsOf = residents.filter(r =>
+                        hostelRoomNums.has(r.roomNum) && r.joiningDate && r.joiningDate <= asOfDate
+                      ).length;
+                      const vacatedButPresentAsOf = vacatedResidents.filter(r =>
+                        hostelRoomNums.has(r.roomNum) &&
+                        r.joiningDate && r.joiningDate <= asOfDate &&
+                        r.vacatedAt && r.vacatedAt.slice(0, 10) > asOfDate
+                      ).length;
+
+                      const totalOccupied = activeAsOf + vacatedButPresentAsOf;
+                      const totalVacant  = Math.max(0, totalBeds - totalOccupied);
                       const hostelPct = totalBeds > 0 ? Math.round((totalOccupied / totalBeds) * 100) : 0;
 
                       return (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           {/* Hostel Pie */}
                           <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-4">Hostel Bed Occupancy</p>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Hostel Bed Occupancy</p>
+                            <p className="text-[10px] text-slate-400 mb-4">As of {asOfDate}</p>
                             <div className="flex items-center gap-6">
                               <DonutChart
                                 total={totalBeds}
