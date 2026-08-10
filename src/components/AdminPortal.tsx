@@ -306,6 +306,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
   const [reportStartDate, setReportStartDate] = useState("");
   const [reportEndDate, setReportEndDate] = useState("");
   const [reportShowResidents, setReportShowResidents] = useState(false);
+  const [reportShowEstimatedIncome, setReportShowEstimatedIncome] = useState(false);
 
   // Form State - Reminder
   const [remTitle, setRemTitle] = useState("");
@@ -1483,6 +1484,10 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
     if (roomStatusFilter === "Vacant") isStatusMatch = room.occupiedCount === 0;
     else if (roomStatusFilter === "Available Slots") isStatusMatch = room.occupiedCount > 0 && room.occupiedCount < roomCapacity;
     else if (roomStatusFilter === "Fully Booked") isStatusMatch = room.occupiedCount >= roomCapacity;
+    else if (roomStatusFilter === "Has Vacant Beds") {
+      const reserved = reservedCountByRoom.get(room.roomNum) || 0;
+      isStatusMatch = room.occupiedCount + reserved < roomCapacity;
+    }
 
     return isFloorMatch && isQueryMatch && isStatusMatch;
   });
@@ -1748,7 +1753,10 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                   </div>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-4 hover:shadow-md transition">
+                <div
+                  onClick={() => { setActiveTab("rooms"); setRoomStatusFilter("Has Vacant Beds"); setSelectedResidentId(null); setSelectedRoomNum(null); }}
+                  className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex items-center gap-4 hover:shadow-md hover:border-amber-300 transition cursor-pointer"
+                >
                   <div className="bg-amber-50 p-3 rounded-xl text-amber-600">
                     <Bed className="w-6 h-6" />
                   </div>
@@ -1921,6 +1929,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                         className="bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold px-3 py-1.5 focus:outline-none"
                       >
                         <option value="All">All Rooms Status</option>
+                        <option value="Has Vacant Beds">Has Vacant Beds</option>
                         <option value="Vacant">Fully Vacant (0 Occupants)</option>
                         <option value="Available Slots">Available Beds (1-5 Occupants)</option>
                         <option value="Fully Booked">Fully Occupied (6/6 Beds)</option>
@@ -4583,6 +4592,18 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                       <Users className="w-3.5 h-3.5" />
                       Resident Count
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setReportShowEstimatedIncome(v => !v)}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition cursor-pointer ${
+                        reportShowEstimatedIncome
+                          ? "bg-emerald-600 text-white border-emerald-600"
+                          : "bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      <IndianRupee className="w-3.5 h-3.5" />
+                      Estimated Income
+                    </button>
                   </div>
 
                   {/* Month picker */}
@@ -4685,7 +4706,8 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                       ).length;
 
                       const totalOccupied = activeAsOf + vacatedButPresentAsOf;
-                      const totalVacant  = Math.max(0, totalBeds - totalOccupied);
+                      const totalBooked = pendingBookings.length;
+                      const totalVacant  = Math.max(0, totalBeds - totalOccupied - totalBooked);
                       const hostelPct = totalBeds > 0 ? Math.round((totalOccupied / totalBeds) * 100) : 0;
 
                       return (
@@ -4700,6 +4722,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                                 centerLabel={`${hostelPct}%`}
                                 segments={[
                                   { value: totalOccupied, color: "#6366f1", label: "Occupied" },
+                                  { value: totalBooked,   color: "#f59e0b", label: "Booked"   },
                                   { value: totalVacant,   color: "#e2e8f0", label: "Vacant"   },
                                 ]}
                               />
@@ -4709,6 +4732,13 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                                   <span className="text-xs text-slate-600">Occupied</span>
                                   <span className="ml-auto font-black text-slate-800 text-sm">{totalOccupied}</span>
                                 </div>
+                                {totalBooked > 0 && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-3 h-3 rounded-sm bg-amber-500 flex-shrink-0" />
+                                    <span className="text-xs text-slate-600">Booked</span>
+                                    <span className="ml-auto font-black text-slate-800 text-sm">{totalBooked}</span>
+                                  </div>
+                                )}
                                 <div className="flex items-center gap-2">
                                   <span className="w-3 h-3 rounded-sm bg-slate-200 flex-shrink-0" />
                                   <span className="text-xs text-slate-600">Vacant</span>
@@ -4725,6 +4755,40 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                               </div>
                             </div>
                           </div>
+
+                          {/* Estimated Monthly Rent Income — from currently occupied beds only */}
+                          {reportShowEstimatedIncome && (() => {
+                            const roomCapacityByNum = new Map(allRooms.map(r => [r.roomNum, r.capacity || 6]));
+                            const byType = new Map();
+                            residents.filter(r => hostelRoomNums.has(r.roomNum)).forEach(r => {
+                              const capacity = roomCapacityByNum.get(r.roomNum) || 6;
+                              const g = byType.get(capacity) || { count: 0, total: 0 };
+                              g.count += 1;
+                              g.total += r.rentAmount || 0;
+                              byType.set(capacity, g);
+                            });
+                            const groups = Array.from(byType.entries())
+                              .map(([capacity, g]) => ({ capacity, ...(g as { count: number; total: number }) }))
+                              .sort((a, b) => a.capacity - b.capacity);
+                            const estTotal = groups.reduce((s, g) => s + g.total, 0);
+                            const estBeds = groups.reduce((s, g) => s + g.count, 0);
+
+                            return (
+                              <div className="bg-white border border-emerald-100 rounded-2xl p-5 shadow-sm">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Estimated Monthly Rent Income</p>
+                                <p className="text-[10px] text-slate-400 mb-4">From {estBeds} currently occupied bed{estBeds === 1 ? "" : "s"}</p>
+                                <p className="text-3xl font-black text-emerald-600 mb-3">₹{estTotal.toLocaleString()}</p>
+                                <div className="space-y-1.5">
+                                  {groups.map(g => (
+                                    <div key={g.capacity} className="flex items-center justify-between text-xs">
+                                      <span className="text-slate-500">{g.capacity}-sharing · {g.count} bed{g.count === 1 ? "" : "s"}</span>
+                                      <span className="font-bold text-slate-700">₹{g.total.toLocaleString()}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       );
                     })()}
