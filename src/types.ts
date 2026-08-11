@@ -128,6 +128,26 @@ export interface Expense {
   notes?: string;
 }
 
+// Daily physical-cash reconciliation log, written by the MiSpace PG desktop
+// app's Cash Management screen (Admin/Supervisor).
+export interface CashManagementEntry {
+  id: string;
+  date: string; // YYYY-MM-DD
+  supervisorName: string;
+  managementPerson: string;
+  cashFromManagement: number;
+  cashFromIncome: number;
+  cashCarriedForward: number;
+  spentGroceries: number;
+  spentVegetables: number;
+  spentAdvanceReturn: number;
+  spentOther: number;
+  cashReturnedToManagement: number;
+  remarks?: string;
+  enteredBy: string;
+  enteredAt: string;
+}
+
 export type IncomingPaymentType = "Hostel Resident Monthly" | "Hotel Payment" | "Temporary Accommodation Payment" | "Others";
 
 export interface IncomingPayment {

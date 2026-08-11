@@ -56,7 +56,7 @@ import {
   writeBatch
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { Room, Resident, Reminder, Enquiry, PaymentRecord, ResidentID, Employee, Expense, ExpenseType, IncomingPayment, IncomingPaymentType, HotelBookingRequest, VacatedResident, Booking } from "../types";
+import { Room, Resident, Reminder, Enquiry, PaymentRecord, ResidentID, Employee, Expense, ExpenseType, IncomingPayment, IncomingPaymentType, HotelBookingRequest, VacatedResident, Booking, CashManagementEntry } from "../types";
 import { initialRoomsList, getFloorForRoom, ALL_ROOM_NUMBERS } from "../initialRooms";
 
 // Billing cycle = the resident's join-day anniversary each month (joined on
@@ -88,6 +88,121 @@ function nextDueDate(joiningDate: string, today: Date = new Date()): string {
   return `${candidate.getFullYear()}-${String(candidate.getMonth() + 1).padStart(2, "0")}-${String(
     candidate.getDate()
   ).padStart(2, "0")}`;
+}
+
+function formatISODate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+}
+
+// The most recent occurrence of the resident's joining-day-of-month, on or
+// before today — the billing anniversary they were last expected to pay by.
+// Unlike nextDueDate (always today or later), this is always today or
+// earlier, so it's the right anchor for "how many days overdue are they".
+function lastDueDate(joiningDate: string, today: Date = new Date()): string {
+  const join = new Date(joiningDate);
+  if (isNaN(join.getTime())) return "";
+  const day = join.getDate();
+  let candidate = clampToMonth(today.getFullYear(), today.getMonth(), day);
+  if (candidate > today) {
+    candidate = clampToMonth(today.getFullYear(), today.getMonth() - 1, day);
+  }
+  return formatISODate(candidate);
+}
+
+// Whole days between the resident's last due date and today — 0 if they're
+// not actually behind (their balance is at most one month's rent, i.e. what
+// they'd normally owe between now and their next due date).
+function daysOverdue(rentAmount: number, balanceAmount: number, joiningDate: string, today: Date = new Date()): number {
+  if (!(balanceAmount > (rentAmount || 0))) return 0;
+  const last = lastDueDate(joiningDate, today);
+  if (!last) return 0;
+  const diffMs = today.getTime() - new Date(last).getTime();
+  return Math.max(0, Math.round(diffMs / 86400000));
+}
+
+type CollectionFlag = "darkgreen" | "green" | "yellow" | "orange" | "red";
+
+const FLAG_COLORS: Record<CollectionFlag, { bg: string; border: string; text: string; dot: string }> = {
+  red: { bg: "bg-red-50", border: "border-red-200", text: "text-red-700", dot: "🔴" },
+  orange: { bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-700", dot: "🟠" },
+  yellow: { bg: "bg-yellow-50", border: "border-yellow-200", text: "text-yellow-800", dot: "🟡" },
+  green: { bg: "bg-emerald-50", border: "border-emerald-100", text: "text-emerald-600", dot: "🟢" },
+  darkgreen: { bg: "bg-emerald-100", border: "border-emerald-300", text: "text-emerald-800", dot: "🟢" }
+};
+
+interface HostelFeeAlert {
+  resident: any;
+  due: string;
+  overdueDays: number;
+  redFlag: boolean;
+  flag: CollectionFlag;
+  action: string;
+  minDue: number;
+}
+
+// Residents whose rent is overdue, or whose next due date falls within the
+// next 3 days — same classification the MiSpace PG desktop app's Dashboard
+// uses, so alarms/reminders match between the app and this site.
+function computeHostelFeeAlerts(residents: any[], today: Date = new Date()): HostelFeeAlert[] {
+  const todayStr = formatISODate(today);
+  const windowEnd = new Date(today);
+  windowEnd.setDate(windowEnd.getDate() + 3);
+  const windowEndStr = formatISODate(windowEnd);
+
+  return residents
+    .filter((r) => r.joiningDate && (r.balanceAmount || 0) > 0)
+    .map((r) => {
+      const overdueDays = daysOverdue(r.rentAmount || 0, r.balanceAmount || 0, r.joiningDate, today);
+      const rent = r.rentAmount || 0;
+      const balance = r.balanceAmount || 0;
+      // A balance that's an exact multiple of rent means nothing was paid
+      // toward the outstanding cycle(s) — a partial payment leaves a
+      // remainder. Only meaningful once they're actually overdue.
+      const fullyUnpaid = overdueDays > 0 && rent > 0 && balance % rent === 0;
+
+      let flag: CollectionFlag;
+      let action: string;
+      if (overdueDays === 0) {
+        flag = "darkgreen";
+        action = "Send reminder — due date approaching";
+      } else if (overdueDays <= 7) {
+        // Small outstanding balance within the 1-week grace window isn't
+        // worth an escalated color — treat it like a reminder, not a warning.
+        flag = balance <= 2000 ? "green" : "yellow";
+        action = fullyUnpaid ? "Warning — full rent not paid" : "Warning — partial rent paid";
+      } else if (fullyUnpaid) {
+        flag = "red";
+        action = "Warning — full rent not paid";
+      } else {
+        flag = "orange";
+        action = "Warning — partial rent paid";
+      }
+
+      // Reminders (not yet due): the upcoming month's full rent. Fully
+      // unpaid last month: the full rent, since nothing was paid toward it.
+      // Partially paid last month: only the remainder still owed toward
+      // that cycle, not the full rent or the whole balance.
+      const minDue = overdueDays === 0 ? rent : fullyUnpaid ? rent : balance % rent;
+
+      return {
+        resident: r,
+        due: nextDueDate(r.joiningDate, today),
+        overdueDays,
+        redFlag: overdueDays > 0,
+        flag,
+        action,
+        minDue
+      };
+    })
+    .filter(({ due, redFlag }) => redFlag || (due && due >= todayStr && due <= windowEndStr))
+    .sort((a, b) => {
+      const flagOrder: Record<CollectionFlag, number> = { red: 0, orange: 1, yellow: 2, green: 3, darkgreen: 4 };
+      if (flagOrder[a.flag] !== flagOrder[b.flag]) return flagOrder[a.flag] - flagOrder[b.flag];
+      if (a.redFlag) return b.overdueDays - a.overdueDays;
+      return a.due.localeCompare(b.due);
+    });
 }
 
 const LuxuryHotelSVG = () => (
@@ -182,6 +297,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
   const [serverEmails, setServerEmails] = useState<any[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [cashManagementEntries, setCashManagementEntries] = useState<CashManagementEntry[]>([]);
   const [incomingPayments, setIncomingPayments] = useState<IncomingPayment[]>([]);
   const [hotelBookingRequests, setHotelBookingRequests] = useState<HotelBookingRequest[]>([]);
 
@@ -266,6 +382,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
   const [expListStartDate, setExpListStartDate] = useState("");
   const [expListEndDate, setExpListEndDate] = useState("");
   const [expListGroupBy, setExpListGroupBy] = useState<"none" | "date">("date");
+  const [showCashManagement, setShowCashManagement] = useState(false);
 
   // Outstanding rent card — expand/collapse + grouping
   const [showOutstandingRent, setShowOutstandingRent] = useState(false);
@@ -432,6 +549,18 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
       (err) => console.error("Expenses listener error:", err)
     );
 
+    // 6b. Cash Management Listener (desktop app's daily cash-reconciliation log)
+    const cashManagementUnsub = onSnapshot(
+      collection(db, "cashManagementLogs"),
+      (snapshot) => {
+        const list: CashManagementEntry[] = [];
+        snapshot.forEach((d) => list.push({ id: d.id, ...d.data() } as CashManagementEntry));
+        list.sort((a, b) => b.date.localeCompare(a.date));
+        setCashManagementEntries(list);
+      },
+      (err) => console.error("CashManagement listener error:", err)
+    );
+
     // 7. Incoming Payments Listener
     const incomingPaymentsUnsub = onSnapshot(
       collection(db, "incomingPayments"),
@@ -490,6 +619,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
       enquiriesUnsub();
       employeesUnsub();
       expensesUnsub();
+      cashManagementUnsub();
       incomingPaymentsUnsub();
       bookingRequestsUnsub();
       vacatedResidentsUnsub();
@@ -1504,8 +1634,9 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
     );
   });
 
-  // Residents with outstanding balances for notification on the 2nd
-  const overdueResidents = residents.filter(r => r.balanceAmount > 0);
+  // Residents flagged for overdue-alarm / friendly-reminder notifications —
+  // same red/orange/yellow/green/dark-green classification as the desktop app.
+  const hostelFeeAlerts = computeHostelFeeAlerts(residents);
 
   const visibleEnquiries = enquiries.filter(
     (e) => enquiryStatusFilter === "All" || e.status === enquiryStatusFilter
@@ -1788,44 +1919,53 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                   <div className="flex items-center justify-between border-b border-slate-105 pb-3">
                     <div className="flex items-center gap-2">
                       <AlertTriangle className="w-4 h-4 text-red-600 animate-bounce" />
-                      <h3 className="text-sm font-black text-slate-850 uppercase tracking-wider">Hostel Fee Overdue Alarms</h3>
+                      <h3 className="text-sm font-black text-slate-850 uppercase tracking-wider">Hostel Fee Overdue Alarms &amp; Friendly Reminders</h3>
                     </div>
                     <span className="bg-red-100 text-red-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
-                      {overdueResidents.length} Overdue
+                      {hostelFeeAlerts.length} Flagged
                     </span>
                   </div>
 
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    Each resident's rent is due on the anniversary of their <span className="font-bold text-red-600">joining date</span> every month. Trigger direct WhatsApp reminders using pre-drafted templates below.
+                    Each resident's rent is due on the anniversary of their <span className="font-bold text-red-600">joining date</span> every month. Red/orange = full/partial rent overdue &gt;7 days, yellow = overdue &le;7 days, green = reminders. Trigger direct WhatsApp reminders using pre-drafted templates below.
                   </p>
 
                   <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
-                    {overdueResidents.length === 0 ? (
+                    {hostelFeeAlerts.length === 0 ? (
                       <div className="p-4 bg-emerald-50 text-emerald-800 border border-emerald-100 rounded-xl text-center text-xs font-semibold">
-                        ✓ All residents have cleared outstanding rental balances!
+                        ✓ No overdue balances or upcoming dues in the next 3 days!
                       </div>
                     ) : (
-                      overdueResidents.map((res) => (
-                        <div key={res.id} className="p-3 bg-red-50/60 border border-red-150 rounded-xl flex justify-between items-center text-xs">
-                          <div>
-                            <p className="font-bold text-slate-800">{res.name} (Room {res.roomNum})</p>
-                            <p className="text-slate-450 text-[10px] font-semibold">Outstanding balance: <span className="text-red-700 font-bold font-mono">₹{res.balanceAmount.toLocaleString()}</span></p>
-                            <p className="text-slate-450 text-[10px] font-semibold">Next due: <span className="text-slate-700 font-bold">{nextDueDate(res.joiningDate)}</span></p>
-                          </div>
+                      hostelFeeAlerts.map(({ resident: res, due, flag, action, overdueDays, minDue }) => {
+                        const c = FLAG_COLORS[flag];
+                        return (
+                          <div key={res.id} className={`p-3 ${c.bg} border ${c.border} rounded-xl flex justify-between items-center text-xs`}>
+                            <div>
+                              <p className="font-bold text-slate-800">{c.dot} {res.name} (Room {res.roomNum})</p>
+                              <p className="text-slate-450 text-[10px] font-semibold">
+                                Balance: <span className="text-red-700 font-bold font-mono">₹{Number(res.balanceAmount).toLocaleString()}</span>
+                                {" · "}Min. due: <span className={`${c.text} font-bold font-mono`}>₹{minDue.toLocaleString()}</span>
+                              </p>
+                              <p className="text-slate-450 text-[10px] font-semibold">Next due: <span className="text-slate-700 font-bold">{due}</span></p>
+                              <p className={`text-[10px] font-bold ${c.text}`}>{action}{overdueDays > 0 ? ` (${overdueDays}d)` : ""}</p>
+                            </div>
 
-                          <a
-                            href={`https://wa.me/${res.whatsappNumber}?text=${encodeURIComponent(
-                              `Hi ${res.name}, this is a friendly reminder from MiSpace PG regarding your outstanding lease balance of ₹${res.balanceAmount}, due on ${nextDueDate(res.joiningDate)}. Please clear it today via UPI/Cash. Thank you!`
-                            )}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-sm shrink-0 transition"
-                          >
-                            <MessageCircle className="w-3.5 h-3.5" />
-                            <span>WhatsApp Alert</span>
-                          </a>
-                        </div>
-                      ))
+                            <a
+                              href={`https://wa.me/${res.whatsappNumber}?text=${encodeURIComponent(
+                                flag === "darkgreen"
+                                  ? `Hi ${res.name}, this is a friendly reminder from MiSpace PG that your rent of ₹${minDue.toLocaleString()} is due on ${due}. Please arrange payment on time. Thank you!`
+                                  : `Hi ${res.name}, this is a reminder from MiSpace PG regarding your outstanding lease balance of ₹${Number(res.balanceAmount).toLocaleString()}. A minimum of ₹${minDue.toLocaleString()} is due immediately. Please clear it today via UPI/Cash. Thank you!`
+                              )}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-sm shrink-0 transition"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" />
+                              <span>WhatsApp Alert</span>
+                            </a>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </div>
@@ -1900,7 +2040,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
           {activeTab === "rooms" && (
             <div className="space-y-6" id="rooms-tab">
               <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-4">
-                <h3 className="text-base font-extrabold text-slate-900">PG Accommodation Rows - 53 Total Rooms</h3>
+                <h3 className="text-base font-extrabold text-slate-900">PG Accommodation Rows - {rooms.length} Total Rooms</h3>
                 
                 {/* Search & filters row */}
                 <div className="flex flex-wrap gap-4 items-center justify-between border-b border-slate-100 pb-4">
@@ -1913,6 +2053,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                         className="bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold px-3 py-1.5 focus:outline-none"
                       >
                         <option value="All">All Hostel Floors</option>
+                        <option value="0">Ground Floor (2)</option>
                         <option value="1">1st Floor (101-110)</option>
                         <option value="2">2nd Floor (201-210)</option>
                         <option value="3">3rd Floor (301-310)</option>
@@ -4113,6 +4254,30 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
             const filteredTotal = filteredExpenseList.reduce((s, e) => s + e.amount, 0);
             const isFiltered = expListTypeFilter !== "all" || expListDateMode !== "all" || expListSearch.trim() !== "";
 
+            // Cash Management records — filtered by the same date selection
+            // (All Time / Month / Custom Range) as the Expenses list above.
+            const filteredCashManagementEntries = cashManagementEntries.filter((c) => {
+              if (expListDateMode === "month") {
+                if (!c.date.startsWith(expListMonth)) return false;
+              } else if (expListDateMode === "custom") {
+                if (expListStartDate && c.date < expListStartDate) return false;
+                if (expListEndDate && c.date > expListEndDate) return false;
+              }
+              return true;
+            });
+            const cashMgmtTotals = filteredCashManagementEntries.reduce(
+              (acc, c) => {
+                // Cash carried forward from a prior day (not yet returned to
+                // management) is still cash the supervisor is holding — count
+                // it as received, same as fresh cash from management/income.
+                acc.received += (c.cashFromManagement || 0) + (c.cashFromIncome || 0) + (c.cashCarriedForward || 0);
+                acc.spent += (c.spentGroceries || 0) + (c.spentVegetables || 0) + (c.spentAdvanceReturn || 0) + (c.spentOther || 0);
+                acc.returned += c.cashReturnedToManagement || 0;
+                return acc;
+              },
+              { received: 0, spent: 0, returned: 0 }
+            );
+
             return (
               <div className="space-y-6" id="expenses-tab">
                 {/* Summary cards */}
@@ -4146,24 +4311,56 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-5 rounded-2xl border border-slate-150 shadow-sm">
                   <div>
-                    <h3 className="text-base font-extrabold text-slate-900">Expense Records</h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      {filteredExpenseList.length} of {expenses.length} total
-                    </p>
-                    {isFiltered && (
-                      <p className="text-lg font-black text-indigo-600 mt-1">
-                        ₹{filteredTotal.toLocaleString()}
-                        <span className="text-[11px] font-bold text-slate-400 ml-1.5">filtered total</span>
-                      </p>
+                    <h3 className="text-base font-extrabold text-slate-900">
+                      {showCashManagement ? "Cash Management Records" : "Expense Records"}
+                    </h3>
+                    {showCashManagement ? (
+                      <>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {filteredCashManagementEntries.length} of {cashManagementEntries.length} total
+                        </p>
+                        <p className="text-lg font-black text-indigo-600 mt-1">
+                          ₹{cashMgmtTotals.returned.toLocaleString()}
+                          <span className="text-[11px] font-bold text-slate-400 ml-1.5">returned to management</span>
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {filteredExpenseList.length} of {expenses.length} total
+                        </p>
+                        {isFiltered && (
+                          <p className="text-lg font-black text-indigo-600 mt-1">
+                            ₹{filteredTotal.toLocaleString()}
+                            <span className="text-[11px] font-bold text-slate-400 ml-1.5">filtered total</span>
+                          </p>
+                        )}
+                      </>
                     )}
                   </div>
-                  <button
-                    onClick={() => { resetExpenseForm(); setIsAddingExpense(!isAddingExpense); }}
-                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm transition cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    {isAddingExpense ? "Cancel" : "Add Expense"}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowCashManagement((v) => !v)}
+                      className={`flex items-center gap-2 text-xs font-bold px-4 py-2.5 rounded-xl border transition cursor-pointer ${
+                        showCashManagement
+                          ? "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-sm"
+                          : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      <Banknote className="w-4 h-4" />
+                      {showCashManagement ? "Showing Cash Management" : "Cash Management"}
+                    </button>
+                    {!showCashManagement && (
+                      <button
+                        onClick={() => { resetExpenseForm(); setIsAddingExpense(!isAddingExpense); }}
+                        className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-sm transition cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                        {isAddingExpense ? "Cancel" : "Add Expense"}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Filters */}
@@ -4205,41 +4402,43 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Expense Type</label>
-                      <select value={expListTypeFilter} onChange={e => setExpListTypeFilter(e.target.value as ExpenseType | "all")}
-                        className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none">
-                        <option value="all">All Types</option>
-                        {(["Employee Salaries","Grocery Bills","Utility Bills","Vegetables","Repairs","Advance Return","Others"] as ExpenseType[]).map(t => (
-                          <option key={t} value={t}>{t}</option>
-                        ))}
-                      </select>
+                  {!showCashManagement && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Expense Type</label>
+                        <select value={expListTypeFilter} onChange={e => setExpListTypeFilter(e.target.value as ExpenseType | "all")}
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none">
+                          <option value="all">All Types</option>
+                          {(["Employee Salaries","Grocery Bills","Utility Bills","Vegetables","Repairs","Advance Return","Others"] as ExpenseType[]).map(t => (
+                            <option key={t} value={t}>{t}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Search</label>
+                        <input value={expListSearch} onChange={e => setExpListSearch(e.target.value)} placeholder="Title, recipient, paid by, notes…"
+                          className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none focus:border-indigo-500" />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Grouping</label>
+                        <button
+                          type="button"
+                          onClick={() => setExpListGroupBy(v => v === "date" ? "none" : "date")}
+                          className={`w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-lg text-xs font-bold border transition cursor-pointer ${
+                            expListGroupBy === "date"
+                              ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                              : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                          }`}
+                        >
+                          {expListGroupBy === "date" ? "Grouped by date" : "No grouping"}
+                        </button>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Search</label>
-                      <input value={expListSearch} onChange={e => setExpListSearch(e.target.value)} placeholder="Title, recipient, paid by, notes…"
-                        className="w-full bg-slate-50 border border-slate-200 text-xs font-semibold rounded-lg px-3.5 py-2.5 focus:outline-none focus:border-indigo-500" />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-1">Grouping</label>
-                      <button
-                        type="button"
-                        onClick={() => setExpListGroupBy(v => v === "date" ? "none" : "date")}
-                        className={`w-full flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-lg text-xs font-bold border transition cursor-pointer ${
-                          expListGroupBy === "date"
-                            ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
-                            : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                        }`}
-                      >
-                        {expListGroupBy === "date" ? "Grouped by date" : "No grouping"}
-                      </button>
-                    </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Add / Edit Form */}
-                {isAddingExpense && (
+                {!showCashManagement && isAddingExpense && (
                   <form onSubmit={handleAddExpenseSubmit} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-md space-y-5">
                     <h4 className="text-sm font-black text-slate-800 border-b border-slate-100 pb-3">
                       {isEditingExpenseId ? "Edit Expense" : "New Expense"}
@@ -4351,7 +4550,7 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                 )}
 
                 {/* Expense Records */}
-                {(() => {
+                {!showCashManagement && (() => {
                   if (expenses.length === 0) {
                     return (
                       <div className="p-10 text-center text-slate-400 font-medium bg-white rounded-2xl border border-slate-200">
@@ -4474,6 +4673,79 @@ export default function AdminPortal({ onLogout }: AdminPortalProps) {
                           </div>
                         );
                       })}
+                    </div>
+                  );
+                })()}
+
+                {/* Cash Management Records */}
+                {showCashManagement && (() => {
+                  if (filteredCashManagementEntries.length === 0) {
+                    return (
+                      <div className="p-10 text-center text-slate-400 font-medium bg-white rounded-2xl border border-slate-200">
+                        No cash management records for this date selection.
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Total Received</p>
+                          <p className="text-xl font-black text-emerald-600">₹{cashMgmtTotals.received.toLocaleString()}</p>
+                        </div>
+                        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Total Spent</p>
+                          <p className="text-xl font-black text-red-500">₹{cashMgmtTotals.spent.toLocaleString()}</p>
+                        </div>
+                        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">Returned to Management</p>
+                          <p className="text-xl font-black text-indigo-600">₹{cashMgmtTotals.returned.toLocaleString()}</p>
+                        </div>
+                      </div>
+
+                      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto">
+                        <table className="w-full text-xs table-fixed min-w-[1100px]">
+                          <thead>
+                            <tr className="bg-slate-50">
+                              <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-wider px-3 py-2 w-[8%]">Date</th>
+                              <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-wider px-3 py-2 w-[10%]">Supervisor</th>
+                              <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-wider px-3 py-2 w-[10%]">Management</th>
+                              <th className="text-right text-[10px] font-black text-slate-400 uppercase tracking-wider px-3 py-2 w-[9%]">From Mgmt</th>
+                              <th className="text-right text-[10px] font-black text-slate-400 uppercase tracking-wider px-3 py-2 w-[9%]">Returned</th>
+                              <th className="text-right text-[10px] font-black text-slate-400 uppercase tracking-wider px-3 py-2 w-[8%]">Income</th>
+                              <th className="text-right text-[10px] font-black text-slate-400 uppercase tracking-wider px-3 py-2 w-[9%]">Carried Fwd</th>
+                              <th className="text-right text-[10px] font-black text-slate-400 uppercase tracking-wider px-3 py-2 w-[8%]">Groceries</th>
+                              <th className="text-right text-[10px] font-black text-slate-400 uppercase tracking-wider px-3 py-2 w-[8%]">Vegetables</th>
+                              <th className="text-right text-[10px] font-black text-slate-400 uppercase tracking-wider px-3 py-2 w-[9%]">Advance/Rent</th>
+                              <th className="text-right text-[10px] font-black text-slate-400 uppercase tracking-wider px-3 py-2 w-[7%]">Other</th>
+                              <th className="text-left text-[10px] font-black text-slate-400 uppercase tracking-wider px-3 py-2 w-[5%]">Remarks</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {filteredCashManagementEntries.map((c) => {
+                              const spent = (c.spentGroceries || 0) + (c.spentVegetables || 0) + (c.spentAdvanceReturn || 0) + (c.spentOther || 0);
+                              const carriedForward = (c.cashFromManagement || 0) + (c.cashFromIncome || 0) + (c.cashCarriedForward || 0) - spent - (c.cashReturnedToManagement || 0);
+                              return (
+                                <tr key={c.id} className="hover:bg-slate-50">
+                                  <td className="px-3 py-2.5 text-slate-500 leading-tight whitespace-nowrap">{c.date}</td>
+                                  <td className="px-3 py-2.5 text-slate-800 font-bold leading-tight truncate">{c.supervisorName}</td>
+                                  <td className="px-3 py-2.5 text-slate-700 leading-tight truncate">{c.managementPerson}</td>
+                                  <td className="px-3 py-2.5 text-right leading-tight">₹{(c.cashFromManagement || 0).toLocaleString()}</td>
+                                  <td className="px-3 py-2.5 text-right font-bold text-indigo-600 leading-tight">₹{(c.cashReturnedToManagement || 0).toLocaleString()}</td>
+                                  <td className="px-3 py-2.5 text-right text-emerald-600 leading-tight">₹{(c.cashFromIncome || 0).toLocaleString()}</td>
+                                  <td className="px-3 py-2.5 text-right text-slate-500 leading-tight">₹{(c.cashCarriedForward || 0).toLocaleString()}</td>
+                                  <td className="px-3 py-2.5 text-right text-red-500 leading-tight">₹{(c.spentGroceries || 0).toLocaleString()}</td>
+                                  <td className="px-3 py-2.5 text-right text-red-500 leading-tight">₹{(c.spentVegetables || 0).toLocaleString()}</td>
+                                  <td className="px-3 py-2.5 text-right text-red-500 leading-tight">₹{(c.spentAdvanceReturn || 0).toLocaleString()}</td>
+                                  <td className="px-3 py-2.5 text-right text-red-500 leading-tight">₹{(c.spentOther || 0).toLocaleString()}</td>
+                                  <td className="px-3 py-2.5 text-slate-400 leading-tight truncate" title={`Carries to next day: ₹${carriedForward.toLocaleString()}`}>{c.remarks || "—"}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   );
                 })()}

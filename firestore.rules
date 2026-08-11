@@ -78,5 +78,11 @@ service cloud.firestore {
     match /dashboardAlerts/{month} {
       allow read, write: if true;
     }
+
+    // Daily physical-cash reconciliation log, written by the MiSpace PG
+    // desktop app's Cash Management screen (Admin/Supervisor).
+    match /cashManagementLogs/{entryId} {
+      allow read, write: if true;
+    }
   }
 }

@@ -1,6 +1,8 @@
 import { Room } from "./types";
 
 export const ALL_ROOM_NUMBERS = [
+  // Ground Floor
+  "2",
   // Floor 1 (101-110)
   "101", "102", "103", "104", "105", "106", "107", "108", "109", "110",
   // Floor 2 (201-210)
@@ -16,6 +18,7 @@ export const ALL_ROOM_NUMBERS = [
 ];
 
 export function getFloorForRoom(roomNum: string): number {
+  if (roomNum === "2") return 0; // Ground Floor
   if (roomNum.startsWith("1")) return 1;
   if (roomNum.startsWith("2")) return 2;
   if (roomNum.startsWith("3")) return 3;
